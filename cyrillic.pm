@@ -1,5 +1,5 @@
 package cyrillic;
-$cyrillic::VERSION = '2.00';
+$cyrillic::VERSION = '2.01';
 
 use 5.6.0;
 use strict;
@@ -70,6 +70,7 @@ sub __case_factory($$$)
     $cs = $CP_NAME{$cs} if exists $CP_NAME{$cs};
     die "Unknown codepage '$cs'\n" if not exists $CODEPAGE{$cs};
     $fn = ($up?'up':'lo').($fr?'first':'case').'_'.$cs;
+    no strict qw/refs/;
    *$fn = eval sprintf $MUTATOR, sprintf $fr ? 
         'substr(%s,0,1) =~ tr/%s/%s/' : '(%s) =~ tr/%s/%s/', $MUTABLE, 
         $up ? unpack('a33a33', $CODEPAGE{$cs}[2]) : reverse unpack('a33a33', $CODEPAGE{$cs}[2])
@@ -150,7 +151,7 @@ sub import
                 die "Unknown import '$src2dst'!\n";
             __cs2cs_factory( $src, $dst );
         }
-        *{"${pkg}::${src2dst}"} = *$src2dst;
+        *{"${pkg}::${src2dst}"} = \&$src2dst;
     }
 }
 
