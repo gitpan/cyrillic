@@ -1,5 +1,5 @@
 package cyrillic;
-$curillic::VERSION = '1.20';
+$curillic::VERSION = '1.21';
 
 =head1 NAME
 
@@ -138,7 +138,7 @@ sub prepare
     my($src, $dst)=map $$_[2], @CODEPAGE{@_};
     substr($src, length $1, length $2) = '',
     substr($dst, length $1, length $2) = ''  while $dst =~ /^(.+?)( +)/;
-    substr($_, 66, 0) = '\x00-\x7f' for $src, $dst;
+    substr($_, 66, 0) = '\x00-\x7f', s/-/\\-/g for $src, $dst;
     return $src, $dst;
 }
 
@@ -176,17 +176,17 @@ sub upfirst($;$)
     return &$fn( shift );
 }
 
-sub charset($)
-{
-    return $CODEPAGE{shift()}[1];
-}
-
 sub lofirst($;$)
 {
     my $cs = exists $CP_NAME{$_[0]} ? $CP_NAME{shift()} : shift;
     die "Unknown codepage '$cs'\n" unless exists $CODEPAGE{$cs}; my $fn = "lofirst_$cs";
     *$fn = eval sprintf $TRANSLATOR_FIRST, reverse unpack 'a33a33', $CODEPAGE{$cs}[2] unless defined *$fn;
     return &$fn( shift );
+}
+
+sub charset($)
+{
+    return $CODEPAGE{shift()}[1];
 }
 
 sub detect(@)
