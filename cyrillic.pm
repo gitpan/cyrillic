@@ -1,5 +1,5 @@
 package cyrillic;
-$curillic::VERSION = '1.12';
+$curillic::VERSION = '1.20';
 
 =head1 NAME
 
@@ -17,58 +17,62 @@ cyrillic - Library for fast and easy cyrillic text manipulation
 
 If first import parameter is number of codepage then locale switched to they codepage.
 Specialisation (like 'win2dos') call faster then 'convert'.
-Easy adding new charset. For they need only add charset string.
+Easy adding new codepage. For they need only add codepage string.
 
 =head1 FUNCTIONS
 
-  At importing list might be listed named convertors. For Ex.:
+Library includes converting and helper functions:
+    convert, upcase, locase, upfirst, lofirst;
+    detect, charset.
+
+
+At importing list might be listed named convertors. For Ex.:
 
   use cyrillic qw/dos2win win2koi mac2dos ibm2dos/;
+
+
+The following rules are correct for converting functions:
+
+  VAR may be SCALAR or REF to SCALAR.
+  If VAR is REF to SCALAR then SCALAR will be converted.
+  If VAR is ommited then $_ operated.
+  If function called to void context and VAR is not REF
+  then result placed to $_.
+
 
 =item B<convert> SRC_CP, DST_CP, [VAR]
 
 Convert VAR from SRC_CP codepage to DST_CP codepage and returns
-converted string. VAR may be SCALAR or REF to SCALAR. If VAR is
-REF to SCALAR then SCALAR will be converted. If VAR is ommited
-then $_ operated. If function called to void context and VAR is
-not REF then result placed to $_.
+converted string.
 
 =item B<upcase> CODEPAGE, [VAR]
 
 Convert VAR to uppercase using CODEPAGE table and returns
-converted string. VAR may be SCALAR or REF to SCALAR. If VAR is
-REF to SCALAR then SCALAR will be converted. If VAR is ommited
-then $_ operated. If function called to void context and VAR is
-not REF then result placed to $_.
+converted string.
 
 =item B<locase> CODEPAGE, [VAR]
 
 Convert VAR to lowercase using CODEPAGE table and returns
-converted string. VAR may be SCALAR or REF to SCALAR. If VAR is
-REF to SCALAR then SCALAR will be converted. If VAR is ommited
-then $_ operated. If function called to void context and VAR is
-not REF then result placed to $_.
+converted string.
 
 =item B<upfirst> CODEPAGE, [VAR]
 
 Convert first char of VAR to uppercase using CODEPAGE table and returns
-converted string. VAR may be SCALAR or REF to SCALAR. If VAR is
-REF to SCALAR then SCALAR will be converted. If VAR is ommited
-then $_ operated. If function called to void context and VAR is
-not REF then result placed to $_.
+converted string.
 
 =item B<lofirst> CODEPAGE, [VAR]
 
 Convert first char of VAR to lowercase using CODEPAGE table and returns
-converted string. VAR may be SCALAR or REF to SCALAR. If VAR is
-REF to SCALAR then SCALAR will be converted. If VAR is ommited
-then $_ operated. If function called to void context and VAR is
-not REF then result placed to $_.
+converted string.
+
+=item B<charset> CODEPAGE
+
+Returns charset name for CODEPAGE.
 
 =item B<detect> ARRAY
 
-Detect charset of data in ARRAY and returns name of charset.
-If charset name not detected then returns 'eng';
+Detect codepage of data in ARRAY and returns codepage number.
+If codepage not detected then returns undefined value;
 
 =head1 EXAMPLES
 
@@ -103,10 +107,10 @@ If charset name not detected then returns 'eng';
   use cyrillic qw/866/;   # locale switched to 866 codepage
 
   use locale;
-  $str =~ /a-ï/;
+  print $str =~ /(\w+)/;
 
   no locale;
-  $str =~ /a-ï/;
+  print $str =~ /(\w+)/;
 
 =head1 AUTHOR
 
@@ -127,14 +131,13 @@ The latest version of this library is likely to be available from:
 
 =cut
 
-use vars qw/%CODEPAGE %CHARSET %STATISTIC $STATISTIC $TRANSLATOR $TRANSLATOR_FIRST/;
+use vars qw/%CP_NAME %CODEPAGE %STATISTIC $STATISTIC $TRANSLATOR $TRANSLATOR_FIRST/;
 
 sub prepare
 {
-    my($src, $dst)=@_;
+    my($src, $dst)=map $$_[2], @CODEPAGE{@_};
     substr($src, length $1, length $2) = '',
-    substr($dst, length $1, length $2) = ''
-        while $dst =~ /^(.+?)( +)/;
+    substr($dst, length $1, length $2) = ''  while $dst =~ /^(.+?)( +)/;
     substr($_, 66, 0) = '\x00-\x7f' for $src, $dst;
     return $src, $dst;
 }
@@ -142,41 +145,47 @@ sub prepare
 sub convert($$;$)
 {
     my ($src, $dst) = (shift, shift);
-    exists $CODEPAGE{$_} and $_ = $CODEPAGE{$_} for $src, $dst; my $fn = $src.'2'.$dst;
-    exists $CHARSET{$_}  or  die"Unknown charset '$_'\n" for $src, $dst;
-    *$fn = eval sprintf $TRANSLATOR, prepare @CHARSET{$src,$dst} unless defined *$fn;
+    exists $CP_NAME{$_} and $_ = $CP_NAME{$_} for $src, $dst;
+    exists $CODEPAGE{$_} or die"Unknown codepage '$_'\n" for $src, $dst;
+    my $fn = $CODEPAGE{$src}[0].'2'.$CODEPAGE{$dst}[0];
+    *$fn = eval sprintf $TRANSLATOR, prepare($src, $dst) unless defined *$fn;
     return &$fn( shift );
 }
 
 sub upcase($;$)
 {
-    my $cs = exists $CODEPAGE{$_[0]} ? $CODEPAGE{shift()} : shift;
-    die "Unknown charset '$cs'\n" unless exists $CHARSET{$cs}; my $fn = "upcase_$cs";
-    *$fn = eval sprintf $TRANSLATOR, unpack 'a33a33', $CHARSET{$cs} unless defined *$fn;
+    my $cs = exists $CP_NAME{$_[0]} ? $CP_NAME{shift()} : shift;
+    die "Unknown codepage '$cs'\n" unless exists $CODEPAGE{$cs}; my $fn = "upcase_$cs";
+    *$fn = eval sprintf $TRANSLATOR, unpack 'a33a33', $CODEPAGE{$cs}[2] unless defined *$fn;
     return &$fn( shift );
 }
 
 sub locase($;$)
 {
-    my $cs = exists $CODEPAGE{$_[0]} ? $CODEPAGE{shift()} : shift;
-    die "Unknown charset '$cs'\n" unless exists $CHARSET{$cs}; my $fn = "locase_$cs";
-    *$fn = eval sprintf $TRANSLATOR, reverse unpack 'a33a33', $CHARSET{$cs} unless defined *$fn;
+    my $cs = exists $CP_NAME{$_[0]} ? $CP_NAME{shift()} : shift;
+    die "Unknown codepage '$cs'\n" unless exists $CODEPAGE{$cs}; my $fn = "locase_$cs";
+    *$fn = eval sprintf $TRANSLATOR, reverse unpack 'a33a33', $CODEPAGE{$cs}[2] unless defined *$fn;
     return &$fn( shift );
 }
 
 sub upfirst($;$)
 {
-    my $cs = exists $CODEPAGE{$_[0]} ? $CODEPAGE{shift()} : shift;
-    die "Unknown charset '$cs'\n" unless exists $CHARSET{$cs}; my $fn = "upfirst_$cs";
-    *$fn = eval sprintf $TRANSLATOR_FIRST, unpack 'a33a33', $CHARSET{$cs} unless defined *$fn;
+    my $cs = exists $CP_NAME{$_[0]} ? $CP_NAME{shift()} : shift;
+    die "Unknown codepage '$cs'\n" unless exists $CODEPAGE{$cs}; my $fn = "upfirst_$cs";
+    *$fn = eval sprintf $TRANSLATOR_FIRST, unpack 'a33a33', $CODEPAGE{$cs}[2] unless defined *$fn;
     return &$fn( shift );
+}
+
+sub charset($)
+{
+    return $CODEPAGE{shift()}[1];
 }
 
 sub lofirst($;$)
 {
-    my $cs = exists $CODEPAGE{$_[0]} ? $CODEPAGE{shift()} : shift;
-    die "Unknown charset '$cs'\n" unless exists $CHARSET{$cs}; my $fn = "lofirst_$cs";
-    *$fn = eval sprintf $TRANSLATOR_FIRST, reverse unpack 'a33a33', $CHARSET{$cs} unless defined *$fn;
+    my $cs = exists $CP_NAME{$_[0]} ? $CP_NAME{shift()} : shift;
+    die "Unknown codepage '$cs'\n" unless exists $CODEPAGE{$cs}; my $fn = "lofirst_$cs";
+    *$fn = eval sprintf $TRANSLATOR_FIRST, reverse unpack 'a33a33', $CODEPAGE{$cs}[2] unless defined *$fn;
     return &$fn( shift );
 }
 
@@ -184,13 +193,17 @@ sub detect(@)
 {
     my (@data, %score) = @_;
     if( $STATISTIC ){
-        $STATISTIC{$_} = $STATISTIC for keys %CHARSET; undef $STATISTIC;
-        convert 'dos', $_, \$STATISTIC{$_} for grep{ $_ ne 'dos' }keys %STATISTIC;
+        $STATISTIC{$_} = $STATISTIC for keys %CODEPAGE; undef $STATISTIC;
+        convert 866, $_, \$STATISTIC{$_} for grep{ $_ ne 866 }keys %STATISTIC;
         $STATISTIC{$_}={map{unpack 'a2a*',$_}split/\s+/,$STATISTIC{$_}} for keys %STATISTIC;
     }
     local $_ = join ' ', @data;
-    s/[\x00-\x7f]+/ /go;
-    for my $cs( keys %CHARSET ){
+    tr/\x00-\x7f/ /s; s/ .(?= )//go; s/^ //o; s/ $//o;
+
+    return undef unless length and   # can't detect if 8bit chars count less than 1%
+        tr/\x80-\xff// / $_[0] =~ tr/\x40-\xff// > 0.01;
+    
+    for my $cs( keys %CODEPAGE ){
         local $_ = $_;
         locase $cs;
         for( split / / ){
@@ -198,8 +211,7 @@ sub detect(@)
                 $score{$cs} += $STATISTIC{$cs}{substr $_, $i, 2}||0; }
         }
     }
-    $cs = (sort{ $score{$b}<=>$score{$a} }keys%score)[0];
-    return $score{$cs} ? $cs : 'eng';
+    return (sort{ $score{$b}<=>$score{$a} }keys%score)[0];
 }
 
 sub import
@@ -207,7 +219,7 @@ sub import
     my $self = shift;
 
     if( @_ and exists $CODEPAGE{$_[0]} ){
-        eval q#unless(defined *LC_CTYPE){use POSIX 'locale_h'};
+        eval q#unless( defined *LC_CTYPE ){ use POSIX 'locale_h' };
                setlocale LC_CTYPE, 'Russian_Russia.'.shift @_# }
 
     return unless @_;
@@ -217,8 +229,8 @@ sub import
         unless( defined *$src2dst ){
             my ($src, $dst) = $src2dst =~ /^(\w{3})2(\w{3})$/ or
                 die "Unknown import '$src2dst'!\n";
-            exists $CHARSET{$_} or die"Unknown charset '$_'\n" for $src, $dst;
-            *$src2dst = eval sprintf $TRANSLATOR, prepare @CHARSET{$src, $dst};
+            exists $CP_NAME{$_} or die"Unknown codepage '$_'\n" for $src, $dst;
+            *$src2dst = eval sprintf $TRANSLATOR, prepare( @CP_NAME{$src, $dst} );
         }
         *{"${pkge}::${src2dst}"} = *$src2dst;
     }
@@ -240,13 +252,13 @@ return ref $str ? $$str : $str if defined wantarray;
 $_ = $str if defined $_[0] and not ref $str; }
 END
 
-BEGIN{%CHARSET=map{chomp;@_=split/ +/,$_,3;$CODEPAGE{$_[0]}=$_[1];$_[1]=>$_[2]}split/\n/,<<'END'}
-866   dos  ¡¢£¤¥ñ¦§¨©ª«¬­®¯àáâãäåæçèéêëìíîï€‚ƒ„…ð†‡ˆ‰Š‹ŒŽ‘’“”•–—˜™š›œžŸôõö÷ýü\xfføùúû³ÚÄ¿ÀÙº»¼ÈÉÍÛÜßÝÞ°±²ÃÁÅÂ´ÌÊÎË¹µ¶·¸½¾ÆÇÏÐÑÒÓÔÕÖ×ØòócRT
-20866 koi ÁÂ×ÇÄÅ£ÖÚÉÊËÌÍÎÏÐÒÓÔÕÆÈÃÞÛÝßÙØÜÀÑáâ÷çäå³öúéêëìíîïðòóôõæèãþûýÿùøüàñ“›Ÿ—¿\xffœ•ž–‚€ƒ„…¡¨®«¥ Œ‹Ž‘’†‰Šˆ‡±»¾¸µ²´§¦­¬¯°¹º¶·ª©¢¤½¼™˜cRT
-855   ibm  ¢ë¬¦¨„éó·½ÆÐÒÔÖØáãåçªµ¤ûõùžñí÷œÞ¡£ì­§©…êô¸¾ÇÑÓÕ×Ýâäæè«¶¥üöúŸòîøàŒ™˜Ïï\xff    ³ÚÄ¿ÀÙº»¼ÈÉÍÛÜß  °±²ÃÁÅÂ´ÌÊÎË¹                    cRT
-1251  win àáâãäå¸æçèéêëìíîïðñòóôõö÷øùúûüýþÿÀÁÂÃÄÅ¨ÆÇÈÉÊËÌÍÎÏÐÑÒÓÔÕÖ×ØÙÚÛÜÝÞß¯¿¡¢¤¹\xa0°•·v¦--¬L-¦¬-Lã=---¦¦---+++T+¦¦+T¦¦¦¬¬--¦¦¦¦TTLL-ã++ªº©®™
-10007 mac àáâãäå¸æçèéêëìíîïðñòóôõö÷øùúûüýþß€‚ƒ„…ð†‡ˆ‰Š‹ŒŽ‘’“”•–—˜™š›œžŸì•ÙØÛÜ\xca¡¥áÃ                                                  ©¨ª
-28585 iso ÐÑÒÓÔÕñÖ×ØÙÚÛÜÝÞßàáâãäåæçèéêëìíîï°±²³´µ¡¶·¸¹º»¼½¾¿ÀÁÂÃÄÅÆÇÈÉÊËÌÍÎÏ¤ô¦ö ð\x20§÷ú ƒŠ…†Œ“•œ–š’‘                                 £ócRT
+BEGIN{%CODEPAGE=map{chomp;@_=split/ +/,$_,4;$CP_NAME{$_[1]}=$_[0];$_[0]=>[@_[1..3]]}split/\n/,<<'END'}
+866   dos cp866       ¡¢£¤¥ñ¦§¨©ª«¬­®¯àáâãäåæçèéêëìíîï€‚ƒ„…ð†‡ˆ‰Š‹ŒŽ‘’“”•–—˜™š›œžŸôõö÷ýü\xfføùúû³ÚÄ¿ÀÙº»¼ÈÉÍÛÜßÝÞ°±²ÃÁÅÂ´ÌÊÎË¹µ¶·¸½¾ÆÇÏÐÑÒÓÔÕÖ×ØòócRT
+20866 koi koi8-r     ÁÂ×ÇÄÅ£ÖÚÉÊËÌÍÎÏÐÒÓÔÕÆÈÃÞÛÝßÙØÜÀÑáâ÷çäå³öúéêëìíîïðòóôõæèãþûýÿùøüàñ“›Ÿ—¿\xffœ•ž–‚€ƒ„…¡¨®«¥ Œ‹Ž‘’†‰Šˆ‡±»¾¸µ²´§¦­¬¯°¹º¶·ª©¢¤½¼™˜cRT
+855   ibm cp855       ¢ë¬¦¨„éó·½ÆÐÒÔÖØáãåçªµ¤ûõùžñí÷œÞ¡£ì­§©…êô¸¾ÇÑÓÕ×Ýâäæè«¶¥üöúŸòîøàŒ™˜Ïï\xff    ³ÚÄ¿ÀÙº»¼ÈÉÍÛÜß  °±²ÃÁÅÂ´ÌÊÎË¹                    cRT
+1251  win cp1251     àáâãäå¸æçèéêëìíîïðñòóôõö÷øùúûüýþÿÀÁÂÃÄÅ¨ÆÇÈÉÊËÌÍÎÏÐÑÒÓÔÕÖ×ØÙÚÛÜÝÞß¯¿¡¢¤¹\xa0°•·v¦--¬L-¦¬-Lã=---¦¦---+++T+¦¦+T¦¦¦¬¬--¦¦¦¦TTLL-ã++ªº©®™
+10007 mac cp10007    àáâãäå¸æçèéêëìíîïðñòóôõö÷øùúûüýþß€‚ƒ„…ð†‡ˆ‰Š‹ŒŽ‘’“”•–—˜™š›œžŸì•ÙØÛÜ\xca¡¥áÃ                                                  ©¨ª
+28585 iso iso_8859-5 ÐÑÒÓÔÕñÖ×ØÙÚÛÜÝÞßàáâãäåæçèéêëìíîï°±²³´µ¡¶·¸¹º»¼½¾¿ÀÁÂÃÄÅÆÇÈÉÊËÌÍÎÏ¤ô¦ö ð\xa0§÷ú ƒŠ…†Œ“•œ–š’‘                                 £ócRT
 END
 
 BEGIN{$STATISTIC=<<'END'}

@@ -11,38 +11,51 @@ SYNOPSIS
 DESCRIPTION
     If first import parameter is number of codepage then locale switched to
     they codepage. Specialisation (like 'win2dos') call faster then
-    'convert'. Easy adding new charset. For they need only add charset
+    'convert'. Easy adding new codepage. For they need only add codepage
     string.
 
 FUNCTIONS
-      At importing list might be listed named convertors. For Ex.:
+    Library includes converting and helper functions: convert, upcase,
+    locase, upfirst, lofirst; detect, charset.
+
+    At importing list might be listed named convertors. For Ex.:
 
       use cyrillic qw/dos2win win2koi mac2dos ibm2dos/;
 
+    The following rules are correct for converting functions:
+
+      VAR may be SCALAR or REF to SCALAR.
+      If VAR is REF to SCALAR then SCALAR will be converted.
+      If VAR is ommited then $_ operated.
+      If function called to void context and VAR is not REF
+      then result placed to $_.
+
     convert SRC_CP, DST_CP, [VAR]
     Convert VAR from SRC_CP codepage to DST_CP codepage and returns
-    converted string. VAR may be SCALAR or REF to SCALAR. If VAR is REF to
-    SCALAR then SCALAR will be converted. If VAR is ommited then $_
-    operated. If function called to void context and VAR is not REF then
-    result placed to $_.
+    converted string.
 
     upcase CODEPAGE, [VAR]
     Convert VAR to uppercase using CODEPAGE table and returns converted
-    string. VAR may be SCALAR or REF to SCALAR. If VAR is REF to SCALAR then
-    SCALAR will be converted. If VAR is ommited then $_ operated. If
-    function called to void context and VAR is not REF then result placed to
-    $_.
+    string.
 
     locase CODEPAGE, [VAR]
     Convert VAR to lowercase using CODEPAGE table and returns converted
-    string. VAR may be SCALAR or REF to SCALAR. If VAR is REF to SCALAR then
-    SCALAR will be converted. If VAR is ommited then $_ operated. If
-    function called to void context and VAR is not REF then result placed to
-    $_.
+    string.
+
+    upfirst CODEPAGE, [VAR]
+    Convert first char of VAR to uppercase using CODEPAGE table and returns
+    converted string.
+
+    lofirst CODEPAGE, [VAR]
+    Convert first char of VAR to lowercase using CODEPAGE table and returns
+    converted string.
+
+    charset CODEPAGE
+    Returns charset name for CODEPAGE.
 
     detect ARRAY
-    Detect charset of data in ARRAY and returns name of charset. If charset
-    name not detected then returns 'eng';
+    Detect codepage of data in ARRAY and returns codepage number. If
+    codepage not detected then returns undefined value;
 
 EXAMPLES
       use cyrillic qw/convert locase upcase detect dos2win win2dos/;
@@ -59,25 +72,25 @@ EXAMPLES
 
       # EQVIVALENT CALLS:
 
-      dos2win( $str );
+      dos2win( $str );        # called to void context -> result placed to $_
       $_ = dos2win( $str );
 
-      dos2win( \$str );
+      dos2win( \$str );       # called with REF to string -> direct converting
       $str = dos2win( $str );
 
-      dos2win();
+      dos2win();              # with ommited param called -> $_ converted
       dos2win( \$_ );
       $_ = dos2win( $_ );
 
       # FOR EASY SWITCH LOCALE CODEPAGE
 
-      use cyrillic qw/866/;
+      use cyrillic qw/866/;   # locale switched to 866 codepage
 
       use locale;
-      $str =~ /a-ï/;
+      print $str =~ /(\w+)/;
 
       no locale;
-      $str =~ /a-ï/;
+      print $str =~ /(\w+)/;
 
 AUTHOR
     Albert MICHEEV <Albert@f80.n5049.z2.fidonet.org>
@@ -87,4 +100,9 @@ COPYRIGHT
 
     This module is free software; you can redistribute it or modify it under
     the same terms as Perl itself.
+
+AVAILABILITY
+    The latest version of this library is likely to be available from:
+
+     http://www.perl.com/CPAN
 

@@ -1,0 +1,9 @@
+Revision history for Perl extension cyrillic.
+
+1.20  07 Jun 2001
+    - added helper function: charset.
+    - chaged return value of detect.
+    - detect speed optimized
+
+1.12  04 Jun 2001
+    - added functions: lofirst, upfirst.
