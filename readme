@@ -9,10 +9,34 @@ SYNOPSIS
       print win2dos $str;
 
 DESCRIPTION
-    If first import parameter is number of codepage then locale switched to
-    they codepage. Specialisation (like 'win2dos') call faster then
-    'convert'. Easy adding new codepage. For they need only add codepage
-    string.
+    This module includes cyrillic string converting functions from one and
+    to another charset, to upper and to lower case without locale switching.
+    Also included single-byte charsets detection routine. It is easy to add
+    new code pages. For this purpose it is necessary only to add appropriate
+    string of a code page.
+
+    Supported charsets: ibm866, koi8-r, cp855, windows-1251, MacWindows,
+    iso_8859-5, unicode, utf8;
+
+    If the first imported parameter - number of a code page, then locale
+    will be switched to it.
+
+    NOTE! Specialisation (like win2dos, utf2win) call faster then convert.
+
+    NOTE! Only convert function and they specialisation work with Unicode
+    and UTF-8 strings. All others function work only with single-byte
+    sharsets.
+
+    Names for using in named charset convertors:
+
+        dos ibm866       866
+        koi koi8-r       20866
+        ibm cp855        855
+        win windows-1251 1251 
+        mac ms-cyrillic  10007
+        iso iso_8859-5   28585
+        uni Unicode
+        utf UTF-8
 
 FUNCTIONS
     Library includes converting and helper functions: convert, upcase,
@@ -30,9 +54,13 @@ FUNCTIONS
       If function called to void context and VAR is not REF
       then result placed to $_.
 
+CONVERSION METHODS
     convert SRC_CP, DST_CP, [VAR]
     Convert VAR from SRC_CP codepage to DST_CP codepage and returns
     converted string.
+
+    The converting Unicode or UTF-8 data requires presence of installed
+    Unicode::String and Unicode::Map.
 
     upcase CODEPAGE, [VAR]
     Convert VAR to uppercase using CODEPAGE table and returns converted
@@ -50,12 +78,13 @@ FUNCTIONS
     Convert first char of VAR to lowercase using CODEPAGE table and returns
     converted string.
 
+MAINTAINANCE METHODS
     charset CODEPAGE
     Returns charset name for CODEPAGE.
 
     detect ARRAY
-    Detect codepage of data in ARRAY and returns codepage number. If
-    codepage not detected then returns undefined value;
+    Detect single-byte codepage of data in ARRAY and returns codepage
+    number. If codepage not detected then returns undefined value;
 
 EXAMPLES
       use cyrillic qw/convert locase upcase detect dos2win win2dos/;
@@ -69,6 +98,15 @@ EXAMPLES
       print; locase 866;
       print;
       print detect $_;
+
+      # CONVERTING TEST:
+
+      use cyrillic qw/utf2dos mac2utf dos2mac win2dos utf2win/;
+
+      $_ = "Хелло Ворльд!\n";
+
+      print "UTF-8: $_";
+      print "  DOS: ", utf2dos mac2utf dos2mac win2dos utf2win $_;
 
       # EQVIVALENT CALLS:
 
@@ -84,13 +122,23 @@ EXAMPLES
 
       # FOR EASY SWITCH LOCALE CODEPAGE
 
-      use cyrillic qw/866/;   # locale switched to 866 codepage
+      use cyrillic qw/866/;   # locale switched to Russian_Russia.866
 
       use locale;
       print $str =~ /(\w+)/;
 
       no locale;
       print $str =~ /(\w+)/;
+
+FAQ
+      * Q: Why module say: Can't create Unicode::Map for 'koi8-r' charset!
+        A: Your Unicode::Map module can't find map file for 'koi8-r' charset.
+           In Unicode::Map manual is told whence it is possible to download 
+           this file and as it to install in the system.
+
+      * Q: Why perl say: "Undefined subroutine koi2win called" ?
+        A: The function B<koi2win> is specialization of the function B<convert>, 
+           which is created at inclusion it of the name in the list of import.
 
 AUTHOR
     Albert MICHEEV <Albert@f80.n5049.z2.fidonet.org>
@@ -104,5 +152,8 @@ COPYRIGHT
 AVAILABILITY
     The latest version of this library is likely to be available from:
 
-     http://www.perl.com/CPAN
+    http://www.perl.com/CPAN
+
+SEE ALSO
+    Unicode::String, Unicode::Map.
 
