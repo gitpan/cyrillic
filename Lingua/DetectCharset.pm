@@ -46,8 +46,11 @@ sub Detect {
 	}
 
 	return 'KOI8' if $KoiRatio > $WinRatio;	# $MinRatio;
-	return 'WIN'; 				# if $WinRatio > $MinRatio;
-#	return 'ENG';
+#	return 'WIN'; 				# if $WinRatio > $MinRatio;
+
+	# We do english, only if no single cyrillic character were detected
+	return 'WIN' if $WinRatio + $KoiRatio > 0;
+	return 'ENG';
 }
 
 sub GetCodeScore {
@@ -89,7 +92,8 @@ use Lingua::DetectCharset;
 
 $Charset = Lingua::DetectCharset::Detect ($Buffer); 
 
-The returned $Ecoding is either 'WIN' or 'KOI8'.
+The returned $Ecoding is either 'WIN', 'KOI8' or 'ENG'. The last is return when 
+no single cyrillic token are found in buffer.
 
 =head1 DESCRIPTION
 
