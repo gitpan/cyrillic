@@ -1,5 +1,5 @@
 # Package Lingua::DetectCharset
-# Version 1.01
+# Version 1.02
 # Part of "WWW Cyrillic Encoding Suite"
 # Get docs and newest version from
 #	http://www.neystadt.org/cyrillic/
@@ -15,7 +15,7 @@
 
 package Lingua::DetectCharset;
 
-$VERSION = "1.01";
+$VERSION = "1.02";
 
 use Convert::Cyrillic;
 use Lingua::DetectCharset::StatKoi;
@@ -55,7 +55,7 @@ sub Detect {
 	return 'WIN' if $WinRatio > $Utf8Ratio;
 
 	# We do english, only if no single cyrillic character were detected
-	return 'UTF-8' if $WinRatio + $KoiRatio + $Utf8Ratio > 0;
+	return 'UTF8' if $WinRatio + $KoiRatio + $Utf8Ratio > 0;
 	return 'ENG';
 }
 
@@ -103,7 +103,7 @@ use Lingua::DetectCharset;
 
 $Charset = Lingua::DetectCharset::Detect ($Buffer); 
 
-The returned $Charset is either 'WIN', 'KOI8', 'UTF-8' or 'ENG'. The last is return when 
+The returned $Charset is either 'WIN', 'KOI8', 'UTF8' or 'ENG'. The last is return when 
 no single cyrillic token are found in buffer.
 
 =head1 DESCRIPTION
