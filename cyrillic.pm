@@ -1,7 +1,7 @@
 package cyrillic;
-$cyrillic::VERSION = '2.05';
+$cyrillic::VERSION = '2.06';
 
-use 5.6.0;
+use 5.005_02;
 use strict;
 use vars qw/%CP_NAME %CODEPAGE %STATISTIC $STATISTIC $MUTATOR $MUTABLE $MUTATOR_ON_FLY/;
 
@@ -150,7 +150,7 @@ sub import
     no strict qw/refs/;
 
     while( my $src2dst = shift ){
-        unless( defined *$src2dst ){
+        unless( defined &$src2dst ){
             my ($src, $dst) = $src2dst =~ /^([a-z]{3})2([a-z]{3})$/ or
                 die "Unknown import '$src2dst'!\n";
             *{"$pkg\:\:$src2dst"} = eval sprintf $MUTATOR_ON_FLY, $pkg, $src, $dst;

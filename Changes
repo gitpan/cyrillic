@@ -1,7 +1,8 @@
 Revision history for Perl extension cyrillic.
 
-2.04  17 Jun 2001
+2.06  18 Jun 2001
     - bugfix version
+    - modified so it may be used w/ perl 5.005_02
 
 2.02  15 Jun 2001
     - added helper function: charset.
