@@ -1,5 +1,5 @@
 package cyrillic;
-$curillic::VERSION = '1.11';
+$curillic::VERSION = '1.12';
 
 =head1 NAME
 
@@ -49,6 +49,22 @@ REF to SCALAR then SCALAR will be converted. If VAR is ommited
 then $_ operated. If function called to void context and VAR is
 not REF then result placed to $_.
 
+=item B<upfirst> CODEPAGE, [VAR]
+
+Convert first char of VAR to uppercase using CODEPAGE table and returns
+converted string. VAR may be SCALAR or REF to SCALAR. If VAR is
+REF to SCALAR then SCALAR will be converted. If VAR is ommited
+then $_ operated. If function called to void context and VAR is
+not REF then result placed to $_.
+
+=item B<lofirst> CODEPAGE, [VAR]
+
+Convert first char of VAR to lowercase using CODEPAGE table and returns
+converted string. VAR may be SCALAR or REF to SCALAR. If VAR is
+REF to SCALAR then SCALAR will be converted. If VAR is ommited
+then $_ operated. If function called to void context and VAR is
+not REF then result placed to $_.
+
 =item B<detect> ARRAY
 
 Detect charset of data in ARRAY and returns name of charset.
@@ -71,20 +87,20 @@ If charset name not detected then returns 'eng';
 
   # EQVIVALENT CALLS:
 
-  dos2win( $str );
+  dos2win( $str );        # called to void context -> result placed to $_
   $_ = dos2win( $str );
 
-  dos2win( \$str );
+  dos2win( \$str );       # called with REF to string -> direct converting
   $str = dos2win( $str );
 
-  dos2win();
+  dos2win();              # with ommited param called -> $_ converted
   dos2win( \$_ );
   $_ = dos2win( $_ );
 
 
   # FOR EASY SWITCH LOCALE CODEPAGE
 
-  use cyrillic qw/866/;
+  use cyrillic qw/866/;   # locale switched to 866 codepage
 
   use locale;
   $str =~ /a-ï/;
@@ -103,9 +119,15 @@ Copyright (C) 2000, Albert MICHEEV
 This module is free software; you can redistribute it or modify it
 under the same terms as Perl itself.
 
+=head1 AVAILABILITY
+
+The latest version of this library is likely to be available from:
+
+ http://www.perl.com/CPAN
+
 =cut
 
-use vars qw/%CODEPAGE %CHARSET %STATISTIC $STATISTIC $TRANSLATOR/;
+use vars qw/%CODEPAGE %CHARSET %STATISTIC $STATISTIC $TRANSLATOR $TRANSLATOR_FIRST/;
 
 sub prepare
 {
@@ -139,6 +161,22 @@ sub locase($;$)
     my $cs = exists $CODEPAGE{$_[0]} ? $CODEPAGE{shift()} : shift;
     die "Unknown charset '$cs'\n" unless exists $CHARSET{$cs}; my $fn = "locase_$cs";
     *$fn = eval sprintf $TRANSLATOR, reverse unpack 'a33a33', $CHARSET{$cs} unless defined *$fn;
+    return &$fn( shift );
+}
+
+sub upfirst($;$)
+{
+    my $cs = exists $CODEPAGE{$_[0]} ? $CODEPAGE{shift()} : shift;
+    die "Unknown charset '$cs'\n" unless exists $CHARSET{$cs}; my $fn = "upfirst_$cs";
+    *$fn = eval sprintf $TRANSLATOR_FIRST, unpack 'a33a33', $CHARSET{$cs} unless defined *$fn;
+    return &$fn( shift );
+}
+
+sub lofirst($;$)
+{
+    my $cs = exists $CODEPAGE{$_[0]} ? $CODEPAGE{shift()} : shift;
+    die "Unknown charset '$cs'\n" unless exists $CHARSET{$cs}; my $fn = "lofirst_$cs";
+    *$fn = eval sprintf $TRANSLATOR_FIRST, reverse unpack 'a33a33', $CHARSET{$cs} unless defined *$fn;
     return &$fn( shift );
 }
 
@@ -190,6 +228,14 @@ BEGIN{$TRANSLATOR=<<'END'}
 sub(;$){ my $str = $_[0];
 $str = defined wantarray ? $_ : \$_ unless defined $str;
 (ref$str?$$str:$str) =~ tr/%s/%s/;
+return ref $str ? $$str : $str if defined wantarray;
+$_ = $str if defined $_[0] and not ref $str; }
+END
+
+BEGIN{$TRANSLATOR_FIRST=<<'END'}
+sub(;$){ my $str = $_[0];
+$str = defined wantarray ? $_ : \$_ unless defined $str;
+substr(ref$str?$$str:$str,0,1) =~ tr/%s/%s/;
 return ref $str ? $$str : $str if defined wantarray;
 $_ = $str if defined $_[0] and not ref $str; }
 END
