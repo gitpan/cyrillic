@@ -1,5 +1,8 @@
 Revision history for Perl extension cyrillic.
 
+2.04  17 Jun 2001
+    - bugfix version
+
 2.02  15 Jun 2001
     - added helper function: charset.
     - chaged return value of detect.

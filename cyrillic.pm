@@ -1,5 +1,5 @@
 package cyrillic;
-$cyrillic::VERSION = '2.03';
+$cyrillic::VERSION = '2.04';
 
 use 5.6.0;
 use strict;
@@ -84,27 +84,27 @@ sub __case_factory($$$)
 
 sub convert($$;$){ 
     my $fn = __cs2cs_factory shift, shift;
-    return &$fn( shift );
+    return &$fn;
 }
 
 sub upcase($;$){
     my $fn = __case_factory shift, 1, 0;
-    return &$fn( shift );
+    return &$fn;
 }
 
 sub locase($;$){
     my $fn = __case_factory shift, 0, 0;
-    return &$fn( shift );
+    return &$fn;
 }
 
 sub upfirst($;$){
     my $fn = __case_factory shift, 1, 1;
-    return &$fn( shift );
+    return &$fn;
 }
 
 sub lofirst($;$){
     my $fn = __case_factory shift, 0, 1;
-    return &$fn( shift );
+    return &$fn;
 }
 
 sub charset($){
@@ -162,8 +162,8 @@ sub import
 
 BEGIN{($MUTABLE, $MUTATOR)=('ref$str?$$str:$str',<<'END')}
 sub(;$){ 
-    my $str = $_[0];
-    $str = defined wantarray ? $_ : \$_ unless defined $str; %s;
+    my $str = scalar @_ ? $_[0] : defined wantarray ? $_ : \$_;
+    %s if length ref$str?$$str:$str;
     return ref $str ? $$str : $str if defined wantarray;
     $_ = $str if defined $_[0] and not ref $str; 
 }
@@ -171,11 +171,11 @@ END
 
 BEGIN{$MUTATOR_ON_FLY=<<'END'}
 sub(;$){ 
-    my($pkg,$src,$dst)=('%s','%s','%s'); 
-    $pkg.='::'.$src.'2'.$dst;
+    my ($pkg,$src,$dst) = ('%s','%s','%s'); 
+    $pkg .= '::'.$src.'2'.$dst;
     undef *$pkg; 
     *$pkg = __cs2cs_factory $src, $dst; 
-    return &$pkg($_[0]);
+    return &$pkg;
 }
 END
 
