@@ -1,5 +1,5 @@
 package cyrillic;
-$curillic::VERSION = '1.10';
+$curillic::VERSION = '1.11';
 
 =head1 NAME
 
@@ -157,7 +157,7 @@ sub detect(@)
         locase $cs;
         for( split / / ){
             for my $i( 0..length()-2 ){ # fetch pairs of symbols
-                $score{$cs} += $STATISTIC{$cs}{substr $_, $i, 2}; }
+                $score{$cs} += $STATISTIC{$cs}{substr $_, $i, 2}||0; }
         }
     }
     $cs = (sort{ $score{$b}<=>$score{$a} }keys%score)[0];
