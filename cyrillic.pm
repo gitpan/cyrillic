@@ -1,9 +1,9 @@
 package cyrillic;
-$cyrillic::VERSION = '2.01';
+$cyrillic::VERSION = '2.02';
 
 use 5.6.0;
 use strict;
-use vars qw/%CP_NAME %CODEPAGE %STATISTIC $STATISTIC $MUTATOR $MUTABLE/;
+use vars qw/%CP_NAME %CODEPAGE %STATISTIC $STATISTIC $MUTATOR $MUTABLE $MUTATOR_ON_FLY/;
 
 sub __prepare
 {
@@ -22,27 +22,31 @@ sub __cs2cs_factory($$)
     if( $src eq 'utf' &&  $dst eq 'uni'      or $sw =    $src eq 'uni' &&  $dst eq 'utf' )
     {
         $fn = $sw ? 'uni2utf' : 'utf2uni';
-        last if defined &$fn;
-
+        
+        unless( defined &$fn ){
         eval "use Unicode::String" unless defined $Unicode::String::VERSION;
-
         *$fn = eval sprintf $MUTATOR, sprintf
             '%s = Unicode::String::%s( %s )->%s',
             $MUTABLE, $sw?'utf16':'utf8', $MUTABLE, $sw?'utf8':'utf16';
+        }
     }
     elsif( $src eq 'utf' ||  $src eq 'uni'    or $sw =    $dst eq 'utf' ||  $dst eq 'uni' )
     {
         my ($un, $cs) = ($sw ? $dst eq 'uni' : $src eq 'uni', $sw ? $src : $dst );
         $cs = $CP_NAME{$cs} if exists $CP_NAME{$cs};
         $fn = sprintf $sw ? ($un?'%s2uni':'%s2utf') : ($un?'uni2%s':'utf2%s'), $CODEPAGE{$cs}[0];
-        last if defined &$fn;
 
+        print "defined $fn" if defined &$fn;
+
+        unless( defined &$fn ){
         eval "use Unicode::String" unless defined $Unicode::String::VERSION;
         eval "use Unicode::Map"    unless defined $Unicode::Map::VERSION;
 
+        local $_;  # Unicode::Map bugfixer 
+
         $CODEPAGE{$cs}[3] = new Unicode::Map( $CODEPAGE{$cs}[1] ) or 
             die "Can't create Unicode::Map for '$CODEPAGE{$cs}[1]' charset!\n" unless $CODEPAGE{$cs}[3];
-
+        
         *$fn = eval sprintf $MUTATOR, $un ?
            sprintf( '%s = $CODEPAGE{%s}[3]->%s_unicode(%s)',
                $MUTABLE, $cs, (!$sw ? 'from' : 'to'), $MUTABLE ) :
@@ -50,15 +54,15 @@ sub __cs2cs_factory($$)
              '%s = $CODEPAGE{%s}[3]->from_unicode( Unicode::String::utf8(%s) )' :
              '%s = Unicode::String::utf16(  $CODEPAGE{%s}[3]->to_unicode(%s) )->utf8',
              $MUTABLE, $cs, $MUTABLE );
+        }
     }
     else
     {
         exists $CP_NAME{$_} and $_ = $CP_NAME{$_} for $src, $dst;
         exists $CODEPAGE{$_} or die"Unknown codepage '$_'\n" for $src, $dst;
         $fn = $CODEPAGE{$src}[0].'2'.$CODEPAGE{$dst}[0];
-        last if defined &$fn;
        *$fn = eval sprintf $MUTATOR, sprintf '(%s) =~ tr/%s/%s/',
-            $MUTABLE, __prepare($src, $dst);
+            $MUTABLE, __prepare($src, $dst) unless defined &$fn;
     }
 
     return *$fn;
@@ -147,19 +151,32 @@ sub import
 
     while( my $src2dst = shift ){
         unless( defined *$src2dst ){
-            my ($src, $dst) = $src2dst =~ /^(\w{3})2(\w{3})$/ or
+            my ($src, $dst) = $src2dst =~ /^([a-z]{3})2([a-z]{3})$/ or
                 die "Unknown import '$src2dst'!\n";
-            __cs2cs_factory( $src, $dst );
+            *{"$pkg\:\:$src2dst"} = eval sprintf $MUTATOR_ON_FLY, $pkg, $src, $dst;
+        }else{
+            *{"$pkg\:\:$src2dst"} = \&$src2dst;
         }
-        *{"${pkg}::${src2dst}"} = \&$src2dst;
     }
 }
 
 BEGIN{($MUTABLE, $MUTATOR)=('ref$str?$$str:$str',<<'END')}
-sub(;$){ my $str = $_[0];
-$str = defined wantarray ? $_ : \$_ unless defined $str; %s;
-return ref$str?$$str:$str if defined wantarray;
-$_ = $str if defined $_[0] and not ref $str; }
+sub(;$){ 
+    my $str = shift; #$_[0];
+    $str = defined wantarray ? $_ : \$_ unless defined $str; %s;
+    return ref $str ? $$str : $str if defined wantarray;
+    $_ = $str if defined $_[0] and not ref $str; 
+}
+END
+
+BEGIN{$MUTATOR_ON_FLY=<<'END'}
+sub(;$){ 
+    my($pkg,$src,$dst)=('%s','%s','%s'); 
+    $pkg.='::'.$src.'2'.$dst;
+    undef *$pkg; 
+    *$pkg = __cs2cs_factory $src, $dst; 
+    return &$pkg(shift);
+}
 END
 
 BEGIN{%CODEPAGE=map{chomp;@_=split/ +/,$_,4;$CP_NAME{$_[1]}=$_[0];$_[0]=>[@_[1..3]]}split/\n/,<<'END'}
@@ -237,10 +254,37 @@ Supported charsets:
 
 If the first imported parameter - number of a code page, then locale will be switched to it.
 
-NOTE! Specialisation (like B<win2dos>, B<utf2win>) call faster then B<convert>.
+=head1 FUNCTIONS
+
+=over 4
+
+=item * convert - between charsets convertor
+
+=item * upcase - convert to upper case
+
+=item * locase - convert to lower case
+
+=item * upfirst - convert first char to upper case
+
+=item * lofirst - convert first char to lower case
+
+=item * detect - detect codepage number 
+
+=item * charset - returns charset name for codepage number
+
+=back
+
+At importing list also might be listed named convertors. For Ex.:
+
+  use cyrillic qw/dos2win win2koi mac2dos ibm2dos/;
+
+
+NOTE! Specialisations (like B<win2dos>, B<utf2win>) call faster then B<convert>.
+
 
 NOTE! Only B<convert> function and they specialisation work with Unicode and UTF-8 strings.
 All others function work only with single-byte sharsets.
+
 
 Names for using in named charset convertors:
 
@@ -252,18 +296,6 @@ Names for using in named charset convertors:
     iso iso_8859-5   28585
     uni Unicode
     utf UTF-8
-
-
-=head1 FUNCTIONS
-
-Library includes converting and helper functions:
-    convert, upcase, locase, upfirst, lofirst;
-    detect, charset.
-
-
-At importing list might be listed named convertors. For Ex.:
-
-  use cyrillic qw/dos2win win2koi mac2dos ibm2dos/;
 
 
 The following rules are correct for converting functions:
