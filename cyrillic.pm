@@ -1,9 +1,9 @@
 package cyrillic;
-$cyrillic::VERSION = '2.07';
+$cyrillic::VERSION = '2.08';
 
 use 5.005_02;
 use strict;
-use vars qw/%CP_NAME %CODEPAGE %STATISTIC $MUTATOR $MUTABLE/;
+use vars qw/%CP_NAME %CODEPAGE %STATISTIC $MUTABLE/;
 
 sub __prepare
 {
@@ -16,13 +16,12 @@ sub __prepare
 
 sub __mutator_factory($)
 {
-    my $mutator = shift;
-    return sub(;$){
+    eval sprintf q/sub(;$){
         my $str = scalar @_ ? $_[0] : defined wantarray ? $_ : \$_;
-        eval $mutator if length ref$str?$$str:$str;
+        %s if length ref$str?$$str:$str;
         return ref $str ? $$str : $str if defined wantarray;
         $_ = $str if defined $_[0] and not ref $str;
-    };
+    }/, shift;
 }
 
 sub __cs2cs_factory($$)
