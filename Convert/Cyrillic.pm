@@ -1,6 +1,6 @@
 # Package Convert::Cyrillic
-# Version 1.00
-# Part of "WWW Cyrillic Encoding Suite"
+# Version 1.01
+# Part of "Cyrillic Software Suite"
 # Get docs and newest version from
 #	http://www.neystadt.org/cyrillic/
 #
@@ -13,7 +13,16 @@
 
 package Convert::Cyrillic;
 
-$VERSION = "1.0";
+$VERSION = "1.01";
+
+=head1 NAME
+
+Convert::Cyrillic v1.01 - Routines for converting from one cyrillic charset to another.
+
+=cut
+
+use Unicode::Map8;
+use Unicode::String;
 
 $UCase {'KOI'} = "áâ÷çäå³öúéêëìíîïðòóôõæèãþûý\377ùøüàñ";
 $LCase {'KOI'} = "ÁÂ×ÇÄÅ£ÖÚÉÊËÌÍÎÏÐÒÓÔÕÆÈÃÞÛÝßÙØÜÀÑ";
@@ -35,7 +44,21 @@ sub cstocs {
 	$Src = uc ($Src); $Src .= '8' if $Src eq 'KOI';
 	$Dst = uc ($Dst); $Dst .= '8' if $Dst eq 'KOI';
 
-	eval "\$Buf =~ tr/$tab{$Src}/$tab{$Dst}/";
+	if ($Src eq 'UTF8') {
+		my $map = Unicode::Map8->new("cp1251");
+		
+		$Buf = $map->to8 (Unicode::String::utf8 ($Buf)->ucs2);
+		$Src = 'WIN';
+	}
+
+	if ($Dst eq 'UTF8') {
+		eval "\$Buf =~ tr/$tab{$Src}/$tab{'WIN'}/";
+		my $map = Unicode::Map8->new("cp1251");
+		$Buf = $map->tou ($Buf)->utf8;
+	} else {
+		eval "\$Buf =~ tr/$tab{$Src}/$tab{$Dst}/";
+	}
+
 	if ($Dst eq 'VOL') {
 		$Buf =~s/¨/YO/go; $Buf =~s/Æ/ZH/go; $Buf =~s/×/CH/go;
 		$Buf =~s/Ø/SH/go; $Buf =~s/Ý/E\'/go; $Buf =~s/Þ/YU/go; 
@@ -62,10 +85,6 @@ sub toUpper {
 
 __END__
 
-=head1 NAME
-
-Convert::Cyrillic - Routines for converting from one cyrillic charset to another.
-
 =head1 SYNOPSIS
 
 	use Convert::Cyrillic;
@@ -85,11 +104,12 @@ from user encoding to one used by your site.
 Where B<$Src> and B<$Dst> are one of: 
 
 	KOI8 - for KOI8-R 
-	DOS - for DOS, alternative, CP-866 
-	ISO - for ISO-8859-5 
 	WIN - for WIN-1251 
-	VOL - for Volapuk (transliteration) 
+	DOS - for DOS, alternative, CP-866 
 	MAC - for Macintosh 
+	ISO - for ISO-8859-5 
+	UTF-8 - for UTF-8 (Unicode)
+	VOL - for Volapuk (transliteration) 
 
 Buffer may contain line breaks, which are preserved.
 
