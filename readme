@@ -1,20 +1,18 @@
 NAME
-    cyrillic - Library for cyrillic text manipulation
+    cyrillic - Library for fast and easy cyrillic text manipulation
 
 SYNOPSIS
-      use cyrillic qw/866 win2dos/;
+      use cyrillic qw/866 win2dos convert locase upcase detect/;
 
-      print cyrillic::convert( 866, 1251, $str );
-      print cyrillic::convert( 'dos','win', \$str );
+      print convert( 866, 1251, $str );
+      print convert( 'dos','win', \$str );
       print win2dos $str;
 
 DESCRIPTION
-    If first import parameters is number of codepage then localisation
-    switched to they codepage. Specialisations like 'win2dos' work more
-    faster then 'convert', while eval procedure called only once, when
-    function created.
-
-    Easy adding new charset. For they need only add charset string.
+    If first import parameter is number of codepage then locale switched to
+    they codepage. Specialisation (like 'win2dos') call faster then
+    'convert'. Easy adding new charset. For they need only add charset
+    string.
 
 FUNCTIONS
       At importing list might be listed named convertors. For Ex.:
@@ -45,6 +43,41 @@ FUNCTIONS
     detect ARRAY
     Detect charset of data in ARRAY and returns name of charset. If charset
     name not detected then returns 'eng';
+
+EXAMPLES
+      use cyrillic qw/convert locase upcase detect dos2win win2dos/;
+
+      $\ = "\n";
+      $_ = "\x8F\xE0\xA8\xA2\xA5\xE2 \xF0\xA6\x88\xAA\x88!";
+
+      print; upcase 866;
+      print; dos2win;
+      print; win2dos;
+      print; locase 866;
+      print;
+      print detect $_;
+
+      # EQVIVALENT CALLS:
+
+      dos2win( $str );
+      $_ = dos2win( $str );
+
+      dos2win( \$str );
+      $str = dos2win( $str );
+
+      dos2win();
+      dos2win( \$_ );
+      $_ = dos2win( $_ );
+
+      # FOR EASY SWITCH LOCALE CODEPAGE
+
+      use cyrillic qw/866/;
+
+      use locale;
+      $str =~ /a-ï/;
+
+      no locale;
+      $str =~ /a-ï/;
 
 AUTHOR
     Albert MICHEEV <Albert@f80.n5049.z2.fidonet.org>
