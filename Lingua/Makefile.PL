@@ -5,4 +5,5 @@ use ExtUtils::MakeMaker;
 WriteMakefile(
     'NAME'	=> 'Lingua::DetectCharset',
     'VERSION_FROM' => 'DetectCharset.pm', # finds $VERSION
+    'PREREQ_PM' => { Unicode::Map8 => 0, Unicode::String => 0 }
 );
