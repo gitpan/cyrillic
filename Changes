@@ -1,5 +1,8 @@
 Revision history for Perl extension cyrillic.
 
+2.07  04 Jul 2001
+    - optimized via removing eval blocks
+
 2.06  18 Jun 2001
     - bugfix version
     - modified so it may be used w/ perl 5.005_02

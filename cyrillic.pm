@@ -1,9 +1,9 @@
 package cyrillic;
-$cyrillic::VERSION = '2.06';
+$cyrillic::VERSION = '2.07';
 
 use 5.005_02;
 use strict;
-use vars qw/%CP_NAME %CODEPAGE %STATISTIC $STATISTIC $MUTATOR $MUTABLE $MUTATOR_ON_FLY/;
+use vars qw/%CP_NAME %CODEPAGE %STATISTIC $MUTATOR $MUTABLE/;
 
 sub __prepare
 {
@@ -12,6 +12,17 @@ sub __prepare
     substr($dst, length $1, length $2) = ''  while $dst =~ /^(.+?)( +)/;
     s/-/\\-/g, substr($_, 66, 0) = '\x00-\x7f' for $src, $dst;
     return $src, $dst;
+}
+
+sub __mutator_factory($)
+{
+    my $mutator = shift;
+    return sub(;$){
+        my $str = scalar @_ ? $_[0] : defined wantarray ? $_ : \$_;
+        eval $mutator if length ref$str?$$str:$str;
+        return ref $str ? $$str : $str if defined wantarray;
+        $_ = $str if defined $_[0] and not ref $str;
+    };
 }
 
 sub __cs2cs_factory($$)
@@ -24,10 +35,9 @@ sub __cs2cs_factory($$)
         $fn = $sw ? 'uni2utf' : 'utf2uni';
 
         unless( defined &$fn ){
-        eval "use Unicode::String" unless defined $Unicode::String::VERSION;
-        *$fn = eval sprintf $MUTATOR, sprintf
-            '%s = Unicode::String::%s( %s )->%s',
-            $MUTABLE, $sw?'utf16':'utf8', $MUTABLE, $sw?'utf8':'utf16';
+        require "Unicode/String.pm" unless defined %Unicode::String::;
+        *$fn = __mutator_factory( sprintf '%s = Unicode::String::%s( %s )->%s',
+            $MUTABLE, $sw?'utf16':'utf8', $MUTABLE, $sw?'utf8':'utf16' );
         }
     }
     elsif( $src eq 'utf' ||  $src eq 'uni'    or $sw =    $dst eq 'utf' ||  $dst eq 'uni' )
@@ -39,21 +49,23 @@ sub __cs2cs_factory($$)
         print "defined $fn" if defined &$fn;
 
         unless( defined &$fn ){
-        eval "use Unicode::String" unless defined $Unicode::String::VERSION;
-        eval "use Unicode::Map"    unless defined $Unicode::Map::VERSION;
 
+        require "Unicode/String.pm" unless defined %Unicode::String::;
+        require "Unicode/Map.pm"    unless defined %Unicode::Map::;
         local $_;  # Unicode::Map bugfixer
 
         $CODEPAGE{$cs}[3] = new Unicode::Map( $CODEPAGE{$cs}[1] ) or
             die "Can't create Unicode::Map for '$CODEPAGE{$cs}[1]' charset!\n" unless $CODEPAGE{$cs}[3];
 
-        *$fn = eval sprintf $MUTATOR, $un ?
-           sprintf( '%s = $CODEPAGE{%s}[3]->%s_unicode(%s)',
-               $MUTABLE, $cs, (!$sw ? 'from' : 'to'), $MUTABLE ) :
-           sprintf( !$sw ?
-             '%s = $CODEPAGE{%s}[3]->from_unicode( Unicode::String::utf8(%s) )' :
-             '%s = Unicode::String::utf16(  $CODEPAGE{%s}[3]->to_unicode(%s) )->utf8',
-             $MUTABLE, $cs, $MUTABLE );
+        *$fn = __mutator_factory( $un ?
+            sprintf( '%s = $CODEPAGE{%s}[3]->%s_unicode(%s)',
+                $MUTABLE, $cs, (!$sw ? 'from' : 'to'), $MUTABLE ) :
+            sprintf( !$sw ?
+                '%s = $CODEPAGE{%s}[3]->from_unicode( Unicode::String::utf8(%s) )' :
+                '%s = Unicode::String::utf16(  $CODEPAGE{%s}[3]->to_unicode(%s) )->utf8',
+                $MUTABLE, $cs, $MUTABLE )
+        );
+
         }
     }
     else
@@ -61,8 +73,8 @@ sub __cs2cs_factory($$)
         exists $CP_NAME{$_} and $_ = $CP_NAME{$_} for $src, $dst;
         exists $CODEPAGE{$_} or die"Unknown codepage '$_'\n" for $src, $dst;
         $fn = $CODEPAGE{$src}[0].'2'.$CODEPAGE{$dst}[0];
-       *$fn = eval sprintf $MUTATOR, sprintf '(%s) =~ tr/%s/%s/',
-            $MUTABLE, __prepare($src, $dst) unless defined &$fn;
+       *$fn = __mutator_factory sprintf('(%s) =~ tr/%s/%s/',
+            $MUTABLE, __prepare($src, $dst)) unless defined &$fn;
     }
 
     return *$fn;
@@ -75,36 +87,35 @@ sub __case_factory($$$)
     die "Unknown codepage '$cs'\n" if not exists $CODEPAGE{$cs};
     $fn = ($up?'up':'lo').($fr?'first':'case').'_'.$cs;
     no strict qw/refs/;
-   *$fn = eval sprintf $MUTATOR, sprintf $fr ?
-        'substr(%s,0,1) =~ tr/%s/%s/' : '(%s) =~ tr/%s/%s/', $MUTABLE,
-        $up ? unpack('a33a33', $CODEPAGE{$cs}[2]) : reverse unpack('a33a33', $CODEPAGE{$cs}[2])
+   *$fn = __mutator_factory sprintf( $fr ? 'substr(%s,0,1) =~ tr/%s/%s/' : '(%s) =~ tr/%s/%s/', $MUTABLE,
+        $up ? unpack('a33a33', $CODEPAGE{$cs}[2]) : reverse unpack('a33a33', $CODEPAGE{$cs}[2]) )
         unless defined &$fn;
     return *$fn;
 }
 
 sub convert($$;$){
     my $fn = __cs2cs_factory shift, shift;
-    return &$fn;
+    goto &$fn;
 }
 
 sub upcase($;$){
     my $fn = __case_factory shift, 1, 0;
-    return &$fn;
+    goto &$fn;
 }
 
 sub locase($;$){
     my $fn = __case_factory shift, 0, 0;
-    return &$fn;
+    goto &$fn;
 }
 
 sub upfirst($;$){
     my $fn = __case_factory shift, 1, 1;
-    return &$fn;
+    goto &$fn;
 }
 
 sub lofirst($;$){
     my $fn = __case_factory shift, 0, 1;
-    return &$fn;
+    goto &$fn;
 }
 
 sub charset($){
@@ -114,10 +125,13 @@ sub charset($){
 sub detect(@)
 {
     my (@data, %score) = @_;
-    if( $STATISTIC ){
-        $STATISTIC{$_} = $STATISTIC for keys %CODEPAGE; undef $STATISTIC;
-        convert 866, $_, \$STATISTIC{$_} for grep{ $_ ne 866 }keys %STATISTIC;
-        $STATISTIC{$_}={map{unpack 'a2a*',$_}split/\s+/,$STATISTIC{$_}} for keys %STATISTIC;
+    unless( scalar keys %STATISTIC ){
+        my $STATISTIC = join '', <DATA>;
+        for( keys %CODEPAGE ){
+            $STATISTIC{$_} = $STATISTIC;
+            convert 866, $_, \$STATISTIC{$_} if $_ != 866;
+            $STATISTIC{$_} = { map{ unpack 'a2a*',$_ }split /\s+/, $STATISTIC{$_} };
+        }
     }
     local $_ = join ' ', @data;
     tr/\x00-\x7f/ /s; s/ .(?= )//go; s/^ //o; s/ $//o;
@@ -141,7 +155,7 @@ sub import
     my $self = shift;
 
     if( @_ and exists $CODEPAGE{$_[0]} ){
-        eval "use POSIX" unless defined &POSIX::setlocale;
+        require 'POSIX.pm' unless defined &POSIX::setlocale;
         POSIX::setlocale( &POSIX::LC_CTYPE, 'Russian_Russia.'.shift @_ );
     }
 
@@ -153,33 +167,18 @@ sub import
         unless( defined &$src2dst ){
             my ($src, $dst) = $src2dst =~ /^([a-z]{3})2([a-z]{3})$/ or
                 die "Unknown import '$src2dst'!\n";
-            *{"$pkg\:\:$src2dst"} = eval sprintf $MUTATOR_ON_FLY, $pkg, $src, $dst;
+            *{$pkg.'::'.$src2dst} = sub(;$){
+                undef *{$pkg.'::'.$src2dst};
+                *{$pkg.'::'.$src2dst} = __cs2cs_factory $src, $dst;
+                goto &$src2dst;
+            };
         }else{
-            *{"$pkg\:\:$src2dst"} = \&$src2dst;
+            *{$pkg.'::'.$src2dst} = \&$src2dst;
         }
     }
 }
 
-BEGIN{($MUTABLE, $MUTATOR)=('ref$str?$$str:$str',<<'END')}
-sub(;$){
-    my $str = scalar @_ ? $_[0] : defined wantarray ? $_ : \$_;
-    %s if length ref$str?$$str:$str;
-    return ref $str ? $$str : $str if defined wantarray;
-    $_ = $str if defined $_[0] and not ref $str;
-}
-END
-
-BEGIN{$MUTATOR_ON_FLY=<<'END'}
-sub(;$){
-    my ($pkg,$src,$dst) = ('%s','%s','%s');
-    $pkg .= '::'.$src.'2'.$dst;
-    undef *$pkg;
-    *$pkg = __cs2cs_factory $src, $dst;
-    return &$pkg;
-}
-END
-
-BEGIN{%CODEPAGE=map{chomp;@_=split/ +/,$_,4;$CP_NAME{$_[1]}=$_[0];$_[0]=>[@_[1..3]]}split/\n/,<<'END'}
+BEGIN{%CODEPAGE=map{chomp;@_=split/ +/,$_,4;$CP_NAME{$_[1]}=int $_[0];int $_[0]=>[@_[1..3]]}split/\n/,<<'END';$MUTABLE='ref$str?$$str:$str'}
 866   dos ibm866        абвгдеёжзийклмнопрстуфхцчшщъыьэюяАБВГДЕЁЖЗИЙКЛМНОПРСТУФХЦЧШЩЪЫЬЭЮЯЇїЎў¤№\xff°∙·√│┌─┐└┘║╗╝╚╔═█▄▀▌▐░▒▓├┴┼┬┤╠╩╬╦╣╡╢╖╕╜╛╞╟╧╨╤╥╙╘╒╓╫╪ЄєcRT
 20866 koi koi8-r        ┴┬╫╟─┼г╓┌╔╩╦╠═╬╧╨╥╙╘╒╞╚├▐█▌▀┘╪▄└╤стўчфх│Ў·щъыьэюяЁЄєЇїцшу■√¤ ∙°№рёУЫЯЧЭ┐\xffЬХЮЦБВАГДЕбиолеаНМЛОПРСТЖЙКИЗ▒╗╛╕╡▓┤зжнмп░╣║╢╖кйвд╜╝ЩШcRT
 855   ibm cp855         авымжиДщє╖╜╞╨╥╘╓╪сухчк╡д√ї∙ЮёэўЬ▐бгьнзйЕъЇ╕╛╟╤╙╒╫▌тфцшл╢е№Ў·ЯЄю°ЭрНМЩШ╧я\xffo..v│┌─┐└┘║╗╝╚╔═█▄▀||░▒▓├┴┼┬┤╠╩╬╦╣┤║╗┐╝┘├╠╩┴╦╦╚╚╔╔╬╬ЗЖcRT
@@ -188,46 +187,7 @@ BEGIN{%CODEPAGE=map{chomp;@_=split/ +/,$_,4;$CP_NAME{$_[1]}=$_[0];$_[0]=>[@_[1..
 28585 iso iso_8859-5    ╨╤╥╙╘╒ё╓╫╪┘┌█▄▌▐▀рстуфхцчшщъыьэюя░▒▓│┤╡б╢╖╕╣║╗╝╜╛┐└┴┬├─┼╞╟╚╔╩╦╠═╬╧дЇжЎ Ё\xa0зў·vГНКЕЖМУХЬЦЭЪТСРТТТТТГК+КГУЪ+ЪУГУХЕЬМГУЪКЪЪЦЦЭЭ++гєcRT
 END
 
-BEGIN{$STATISTIC=<<'END'}
-ст21815 ен19276 на16528 ов15172 го15161 но14457 ни14151 ог13562 пр13327 ре11067 ал10935 ан10268 ра10059
-ло9899 та9785 то9712 ны9281 ли9040 тв8956 нн8956 ат8884 по8786 де8713 ос8626 ед8332 те8202 ел8125 од7820
-ия7815 ри7582 ль7487 ва7418 ор7308 во7277 за7005 ер6823 ро6767 от6679 ко6609 ет6596 ом6329 ле6066 ии5903
-ой5834 ес5705 ве5465 ла5440 до5347 ти5253 ци5193 не5075 из5064 ас5043 ых4998 тс4966 об4868 ме4818 че4731
-ть4693 им4656 ие4628 ав4563 ка4402 ол4400 со4388 ще4290 ся4197 га4191 мо4078 да4049 щи3968 вл3853 ац3797
-сл3732 ск3716 ин3708 ар3706 ми3684 оп3632 пл3612 ам3465 же3459 ит3398 тр3392 ис3354 ьн3296 ил3261 ий3242
-ем3209 вы3182 ак3162 аз3090 ви2962 ей2958 он2878 ые2847 ля2830 ус2808 ик2804 су2792 ки2724 ег2694 ым2657
-рг2653 ят2587 тн2577 ож2573 пе2500 ру2482 оя2374 ек2366 бо2334 ча2304 уч2289 уп2263 хо2227 ящ2209 их2180
-си2176 лу2139 иц2134 сс2118 ма2073 йс2066 ае2064 ше2054 ющ2041 ую1930 оо1911 нт1893 ок1881 чи1873 ум1778
-ив1769 ая1744 дс1738 це1695 му1684 ио1658 сп1639 ьщ1633 ич1628 зн1570 кт1558 ои1551 ди1530 ач1515 ья1501
-са1493 дп1488 ты1483 ду1460 дн1459 уд1452 мы1424 ое1391 эт1382 ьс1379 ют1342 ущ1336 кс1323 оз1322 жд1303
-еж1286 бы1257 ги1248 ию1245 яз1224 аю1197 ый1192 уг1192 зв1191 ср1185 дл1182 ид1161 нс1150 рс1139 ву1126
-ба1117 ук1098 мм1094 ез1093 зо1076 яе1070 ку1049 вн1048 ря1045 ах1039 св1033 зи999 вк999 лн949 оч944
-ры938 см938 ца935 бл924 чн921 ее911 ня911 ох909 аб891 ир882 яд878 кл876 зд869 яю847 нк840 ту836 бя836
-бр832 фи803 оц799 жа796 ке782 ош778 еч767 яв766 ям765 иб755 ды743 уж743 др741 лю741 зм739 аж716 ну711
-ьи700 сн693 рт683 гр678 кц677 па671 дк660 бе652 кр651 аг646 рм638 еа635 се633 жи632 бъ629 жн620 иа609
-ъе599 ад594 фо591 ащ591 сх590 уш559 ев525 сч522 еб516 юч505 ыт503 ье496 рв496 рн490 ьз487 ея483 ях482
-нд474 пу471 цо461 ут452 шл438 лж434 тк433 рр431 зу430 кж416 еш414 пи409 бс403 ыв400 зе400 ун398 ши397
-ью395 вр394 жб390 фе376 вя370 гл369 зы368 бу365 ып363 бщ358 еп346 дя344 гу337 рж326 уе325 эк311 ыч305
-ул301 ща297 вт286 вш286 ещ286 ео285 вс280 ап277 ыр273 ыд272 фа272 нь271 тч270 пп268 пы266 уб260 ех255
-ыш255 рш254 ур254 дв242 вп241 сы239 юд237 кв225 ыл224 ын219 сб218 цу216 сд213 ъя207 бю206 дж206 аш205
-ыс205 мн204 бн204 зл204 ша200 нв199 чк198 тд197 вз197 би194 ьт193 нз192 чр191 яц184 ец183 вв183 нц176
-нф174 ьк171 иж169 аи166 ьш165 ге162 оу161 хс161 лы157 рь156 сь154 лк153 ай152 иг151 ян151 оф145 ею141
-ув140 дм138 чу134 ощ129 тя122 рк122 иф120 мп119 чт114 ьг113 аф112 шт112 зя112 еф108 шн108 уа104 ип104
-ха102 хр101 лл97 иш96 йн96 бх92 хн92 дъ90 яй90 мл89 лг89 зр89 пя87 нч84 вм82 яс81 ау79 ьм78 зъ77 еи76
-щу70 мс68 гд68 мв68 йо67 дт63 бж63 рб62 юб62 мя61 тм53 ух51 вц51 вх51 дш51 яж51 юр50 фф50 дг49 ищ48 цы47
-зк46 уз45 еу45 ыз38 пн38 зг37 жк37 ыб36 кн35 оэ34 ык33 чл33 дч33 щн33 зц32 зб32 фы31 нг31 мк30 рх30 ьч30
-рч30 эф29 ыя29 вщ28 фн28 дд27 тц27 оа27 ыг27 хи27 пк26 ял26 сф26 дз26 сш25 бм25 тп25 жу25 фт24 тх24 вь24
-ою23 дц22 ьц22 рд21 дб20 яч20 яр20 йш20 дь19 гш19 фу19 яг19 эм19 шк19 уц18 ню18 як18 яя18 рц17 сю17 иу16
-лт16 юз16 эл16 пт15 хг15 щь15 жп15 ху15 еэ15 фл15 мщ14 рл14 пс13 мб13 кш13 гн12 тл12 пц12 йм12 тг12 чь12
-жг11 йт11 гч11 эн11 юв10 эр10 мь10 эв10 вд10 кк10 цв9 рп9 аэ9 ьф9 юс9 бш9 гк8 юц8 лс8 нж8 уя7 хт7 пь7 фь7
-чш7 фр6 хк6 йк6 рф6 уи6 мч6 уф6 ьб6 бз5 ао5 хе5 тз5 цк5 юж5 въ4 шр4 тт4 шь4 лм4 бк4 зь3 йе3 съ3 эс3 яб3
-сг3 йф3 сц3 шу3 тш3 тъ3 фм2 юл2 рю2 кз2 юш2 кг2 фс2 бп2 гт2 пч2 нщ2 хв2 чв2 эп2 зч2 хл2 бв1 юн1 юю1 йп1
-мр1 жф1 вг1 пф1 зт1 йд1 щр1 зж1 ыи1 жр1 хм1 цм1 цл1 лд1
-END
-
 1;
-
-__END__
 
 =head1 NAME
 
@@ -235,11 +195,11 @@ cyrillic - Library for fast and easy cyrillic text manipulation
 
 =head1 SYNOPSIS
 
-  use cyrillic qw/866 win2dos convert locase upcase detect/;
+ use cyrillic qw/866 win2dos convert locase upcase detect/;
 
-  print convert( 866, 1251, $str );
-  print convert( 'dos','win', \$str );
-  print win2dos $str;
+ print convert( 866, 1251, $str );
+ print convert( 'dos','win', \$str );
+ print win2dos $str;
 
 =head1 DESCRIPTION
 
@@ -250,7 +210,7 @@ It is easy to add new code pages. For this purpose it is necessary
 only to add appropriate string of a code page.
 
 Supported charsets:
-    ibm866, koi8-r, cp855, windows-1251, MacWindows, iso_8859-5, unicode, utf8;
+ ibm866, koi8-r, cp855, windows-1251, MacWindows, iso_8859-5, unicode, utf8;
 
 If the first imported parameter - number of a code page, then locale will be switched to it.
 
@@ -276,7 +236,7 @@ If the first imported parameter - number of a code page, then locale will be swi
 
 At importing list also might be listed named convertors. For Ex.:
 
-  use cyrillic qw/dos2win win2koi mac2dos ibm2dos/;
+ use cyrillic qw/dos2win win2koi mac2dos ibm2dos/;
 
 
 NOTE! Specialisations (like B<win2dos>, B<utf2win>) call faster then B<convert>.
@@ -288,23 +248,23 @@ All others function work only with single-byte sharsets.
 
 Names for using in named charset convertors:
 
-    dos ibm866       866
-    koi koi8-r       20866
-    ibm cp855        855
-    win windows-1251 1251
-    mac ms-cyrillic  10007
-    iso iso_8859-5   28585
-    uni Unicode
-    utf UTF-8
+ dos ibm866       866
+ koi koi8-r       20866
+ ibm cp855        855
+ win windows-1251 1251
+ mac ms-cyrillic  10007
+ iso iso_8859-5   28585
+ uni Unicode
+ utf UTF-8
 
 
 The following rules are correct for converting functions:
 
-  VAR may be SCALAR or REF to SCALAR.
-  If VAR is REF to SCALAR then SCALAR will be converted.
-  If VAR is ommited then $_ operated.
-  If function called to void context and VAR is not REF
-  then result placed to $_.
+ VAR may be SCALAR or REF to SCALAR.
+ If VAR is REF to SCALAR then SCALAR will be converted.
+ If VAR is ommited then $_ operated.
+ If function called to void context and VAR is not REF
+ then result placed to $_.
 
 
 =head1 CONVERSION METHODS
@@ -350,65 +310,65 @@ If codepage not detected then returns undefined value;
 
 =head1 EXAMPLES
 
-  use cyrillic qw/convert locase upcase detect dos2win win2dos/;
+ use cyrillic qw/convert locase upcase detect dos2win win2dos/;
 
-  $\ = "\n";
-  $_ = "\x8F\xE0\xA8\xA2\xA5\xE2 \xF0\xA6\x88\xAA\x88!";
+ $_ = "\x8F\xE0\xA8\xA2\xA5\xE2 \xF0\xA6\x88\xAA\x88!";
 
-  print; upcase 866;
-  print; dos2win;
-  print; win2dos;
-  print; locase 866;
-  print;
-  print detect $_;
-
-
-
-  # CONVERTING TEST:
-
-  use cyrillic qw/utf2dos mac2utf dos2mac win2dos utf2win/;
-
-  $_ = "╨е╨╡╨╗╨╗╨╛ ╨Т╨╛╤А╨╗╤М╨┤!\n";
-
-  print "UTF-8: $_";
-  print "  DOS: ", utf2dos mac2utf dos2mac win2dos utf2win $_;
+ printf "    dos: '%s'\n", $_;
+ upcase 866; 
+ printf " upcase: '%s'\n", $_;
+ dos2win;
+ printf "dos2win: '%s'\n", $_;
+ win2dos;
+ printf "win2dos: '%s'\n", $_;
+ locase 866;
+ printf " locase: '%s'\n", $_;
+ printf " detect: '%s'\n", detect $_;
 
 
+ # CONVERTING TEST:
 
-  # EQVIVALENT CALLS:
+ use cyrillic qw/utf2dos mac2utf dos2mac win2dos utf2win/;
 
-  dos2win( $str );        # called to void context -> result placed to $_
-  $_ = dos2win( $str );
+ $_ = "╨е╨╡╨╗╨╗╨╛ ╨Т╨╛╤А╨╗╤М╨┤!\n";
 
-  dos2win( \$str );       # called with REF to string -> direct converting
-  $str = dos2win( $str );
-
-  dos2win();              # with ommited param called -> $_ converted
-  dos2win( \$_ );
-  $_ = dos2win( $_ );
+ print "UTF-8: $_";
+ print "  DOS: ", utf2dos mac2utf dos2mac win2dos utf2win $_;
 
 
+ # EQVIVALENT CALLS:
 
-  # FOR EASY SWITCH LOCALE CODEPAGE
+ dos2win( $str );        # called to void context -> result placed to $_
+ $_ = dos2win( $str );
 
-  use cyrillic qw/866/;   # locale switched to Russian_Russia.866
+ dos2win( \$str );       # called with REF to string -> direct converting
+ $str = dos2win( $str );
 
-  use locale;
-  print $str =~ /(\w+)/;
+ dos2win();              # with ommited param called -> $_ converted
+ dos2win( \$_ );
+ $_ = dos2win( $_ );
 
-  no locale;
-  print $str =~ /(\w+)/;
+
+ # FOR EASY SWITCH LOCALE CODEPAGE
+
+ use cyrillic qw/866/;   # locale switched to Russian_Russia.866
+
+ use locale;
+ print $str =~ /(\w+)/;
+
+ no locale;
+ print $str =~ /(\w+)/;
 
 =head1 FAQ
 
-  * Q: Why module say: Can't create Unicode::Map for 'koi8-r' charset!
-    A: Your Unicode::Map module can't find map file for 'koi8-r' charset.
-       In Unicode::Map manual is told whence it is possible to download
-       this file and as it to install in the system.
+ * Q: Why module say: Can't create Unicode::Map for 'koi8-r' charset!
+   A: Your Unicode::Map module can't find map file for 'koi8-r' charset.
+      In Unicode::Map manual is told whence it is possible to download
+      this file and as it to install in the system.
 
-  * Q: Why perl say: "Undefined subroutine koi2win called" ?
-    A: The function B<koi2win> is specialization of the function B<convert>,
-       which is created at inclusion it of the name in the list of import.
+ * Q: Why perl say: "Undefined subroutine koi2win called" ?
+   A: The function B<koi2win> is specialization of the function B<convert>,
+      which is created at inclusion it of the name in the list of import.
 
 
 =head1 AUTHOR
@@ -433,3 +393,39 @@ http://www.perl.com/CPAN
 Unicode::String, Unicode::Map.
 
 =cut
+
+__DATA__
+ст21815 ен19276 на16528 ов15172 го15161 но14457 ни14151 ог13562 пр13327 ре11067 ал10935 ан10268 ра10059
+ло9899 та9785 то9712 ны9281 ли9040 тв8956 нн8956 ат8884 по8786 де8713 ос8626 ед8332 те8202 ел8125 од7820
+ия7815 ри7582 ль7487 ва7418 ор7308 во7277 за7005 ер6823 ро6767 от6679 ко6609 ет6596 ом6329 ле6066 ии5903
+ой5834 ес5705 ве5465 ла5440 до5347 ти5253 ци5193 не5075 из5064 ас5043 ых4998 тс4966 об4868 ме4818 че4731
+ть4693 им4656 ие4628 ав4563 ка4402 ол4400 со4388 ще4290 ся4197 га4191 мо4078 да4049 щи3968 вл3853 ац3797
+сл3732 ск3716 ин3708 ар3706 ми3684 оп3632 пл3612 ам3465 же3459 ит3398 тр3392 ис3354 ьн3296 ил3261 ий3242
+ем3209 вы3182 ак3162 аз3090 ви2962 ей2958 он2878 ые2847 ля2830 ус2808 ик2804 су2792 ки2724 ег2694 ым2657
+рг2653 ят2587 тн2577 ож2573 пе2500 ру2482 оя2374 ек2366 бо2334 ча2304 уч2289 уп2263 хо2227 ящ2209 их2180
+си2176 лу2139 иц2134 сс2118 ма2073 йс2066 ае2064 ше2054 ющ2041 ую1930 оо1911 нт1893 ок1881 чи1873 ум1778
+ив1769 ая1744 дс1738 це1695 му1684 ио1658 сп1639 ьщ1633 ич1628 зн1570 кт1558 ои1551 ди1530 ач1515 ья1501
+са1493 дп1488 ты1483 ду1460 дн1459 уд1452 мы1424 ое1391 эт1382 ьс1379 ют1342 ущ1336 кс1323 оз1322 жд1303
+еж1286 бы1257 ги1248 ию1245 яз1224 аю1197 ый1192 уг1192 зв1191 ср1185 дл1182 ид1161 нс1150 рс1139 ву1126
+ба1117 ук1098 мм1094 ез1093 зо1076 яе1070 ку1049 вн1048 ря1045 ах1039 св1033 зи999 вк999 лн949 оч944
+ры938 см938 ца935 бл924 чн921 ее911 ня911 ох909 аб891 ир882 яд878 кл876 зд869 яю847 нк840 ту836 бя836
+бр832 фи803 оц799 жа796 ке782 ош778 еч767 яв766 ям765 иб755 ды743 уж743 др741 лю741 зм739 аж716 ну711
+ьи700 сн693 рт683 гр678 кц677 па671 дк660 бе652 кр651 аг646 рм638 еа635 се633 жи632 бъ629 жн620 иа609
+ъе599 ад594 фо591 ащ591 сх590 уш559 ев525 сч522 еб516 юч505 ыт503 ье496 рв496 рн490 ьз487 ея483 ях482
+нд474 пу471 цо461 ут452 шл438 лж434 тк433 рр431 зу430 кж416 еш414 пи409 бс403 ыв400 зе400 ун398 ши397
+ью395 вр394 жб390 фе376 вя370 гл369 зы368 бу365 ып363 бщ358 еп346 дя344 гу337 рж326 уе325 эк311 ыч305
+ул301 ща297 вт286 вш286 ещ286 ео285 вс280 ап277 ыр273 ыд272 фа272 нь271 тч270 пп268 пы266 уб260 ех255
+ыш255 рш254 ур254 дв242 вп241 сы239 юд237 кв225 ыл224 ын219 сб218 цу216 сд213 ъя207 бю206 дж206 аш205
+ыс205 мн204 бн204 зл204 ша200 нв199 чк198 тд197 вз197 би194 ьт193 нз192 чр191 яц184 ец183 вв183 нц176
+нф174 ьк171 иж169 аи166 ьш165 ге162 оу161 хс161 лы157 рь156 сь154 лк153 ай152 иг151 ян151 оф145 ею141
+ув140 дм138 чу134 ощ129 тя122 рк122 иф120 мп119 чт114 ьг113 аф112 шт112 зя112 еф108 шн108 уа104 ип104
+ха102 хр101 лл97 иш96 йн96 бх92 хн92 дъ90 яй90 мл89 лг89 зр89 пя87 нч84 вм82 яс81 ау79 ьм78 зъ77 еи76
+щу70 мс68 гд68 мв68 йо67 дт63 бж63 рб62 юб62 мя61 тм53 ух51 вц51 вх51 дш51 яж51 юр50 фф50 дг49 ищ48 цы47
+зк46 уз45 еу45 ыз38 пн38 зг37 жк37 ыб36 кн35 оэ34 ык33 чл33 дч33 щн33 зц32 зб32 фы31 нг31 мк30 рх30 ьч30
+рч30 эф29 ыя29 вщ28 фн28 дд27 тц27 оа27 ыг27 хи27 пк26 ял26 сф26 дз26 сш25 бм25 тп25 жу25 фт24 тх24 вь24
+ою23 дц22 ьц22 рд21 дб20 яч20 яр20 йш20 дь19 гш19 фу19 яг19 эм19 шк19 уц18 ню18 як18 яя18 рц17 сю17 иу16
+лт16 юз16 эл16 пт15 хг15 щь15 жп15 ху15 еэ15 фл15 мщ14 рл14 пс13 мб13 кш13 гн12 тл12 пц12 йм12 тг12 чь12
+жг11 йт11 гч11 эн11 юв10 эр10 мь10 эв10 вд10 кк10 цв9 рп9 аэ9 ьф9 юс9 бш9 гк8 юц8 лс8 нж8 уя7 хт7 пь7 фь7
+чш7 фр6 хк6 йк6 рф6 уи6 мч6 уф6 ьб6 бз5 ао5 хе5 тз5 цк5 юж5 въ4 шр4 тт4 шь4 лм4 бк4 зь3 йе3 съ3 эс3 яб3
+сг3 йф3 сц3 шу3 тш3 тъ3 фм2 юл2 рю2 кз2 юш2 кг2 фс2 бп2 гт2 пч2 нщ2 хв2 чв2 эп2 зч2 хл2 бв1 юн1 юю1 йп1
+мр1 жф1 вг1 пф1 зт1 йд1 щр1 зж1 ыи1 жр1 хм1 цм1 цл1 лд1
