@@ -1,5 +1,5 @@
 package cyrillic;
-$cyrillic::VERSION = '2.04';
+$cyrillic::VERSION = '2.05';
 
 use 5.6.0;
 use strict;
@@ -14,7 +14,7 @@ sub __prepare
     return $src, $dst;
 }
 
-sub __cs2cs_factory($$)        
+sub __cs2cs_factory($$)
 {
     my ($src, $dst, $fn, $sw) = @_;
     no strict qw/refs/;
@@ -22,7 +22,7 @@ sub __cs2cs_factory($$)
     if( $src eq 'utf' &&  $dst eq 'uni'      or $sw =    $src eq 'uni' &&  $dst eq 'utf' )
     {
         $fn = $sw ? 'uni2utf' : 'utf2uni';
-        
+
         unless( defined &$fn ){
         eval "use Unicode::String" unless defined $Unicode::String::VERSION;
         *$fn = eval sprintf $MUTATOR, sprintf
@@ -42,15 +42,15 @@ sub __cs2cs_factory($$)
         eval "use Unicode::String" unless defined $Unicode::String::VERSION;
         eval "use Unicode::Map"    unless defined $Unicode::Map::VERSION;
 
-        local $_;  # Unicode::Map bugfixer 
+        local $_;  # Unicode::Map bugfixer
 
-        $CODEPAGE{$cs}[3] = new Unicode::Map( $CODEPAGE{$cs}[1] ) or 
+        $CODEPAGE{$cs}[3] = new Unicode::Map( $CODEPAGE{$cs}[1] ) or
             die "Can't create Unicode::Map for '$CODEPAGE{$cs}[1]' charset!\n" unless $CODEPAGE{$cs}[3];
-        
+
         *$fn = eval sprintf $MUTATOR, $un ?
            sprintf( '%s = $CODEPAGE{%s}[3]->%s_unicode(%s)',
                $MUTABLE, $cs, (!$sw ? 'from' : 'to'), $MUTABLE ) :
-           sprintf( !$sw ? 
+           sprintf( !$sw ?
              '%s = $CODEPAGE{%s}[3]->from_unicode( Unicode::String::utf8(%s) )' :
              '%s = Unicode::String::utf16(  $CODEPAGE{%s}[3]->to_unicode(%s) )->utf8',
              $MUTABLE, $cs, $MUTABLE );
@@ -75,14 +75,14 @@ sub __case_factory($$$)
     die "Unknown codepage '$cs'\n" if not exists $CODEPAGE{$cs};
     $fn = ($up?'up':'lo').($fr?'first':'case').'_'.$cs;
     no strict qw/refs/;
-   *$fn = eval sprintf $MUTATOR, sprintf $fr ? 
-        'substr(%s,0,1) =~ tr/%s/%s/' : '(%s) =~ tr/%s/%s/', $MUTABLE, 
+   *$fn = eval sprintf $MUTATOR, sprintf $fr ?
+        'substr(%s,0,1) =~ tr/%s/%s/' : '(%s) =~ tr/%s/%s/', $MUTABLE,
         $up ? unpack('a33a33', $CODEPAGE{$cs}[2]) : reverse unpack('a33a33', $CODEPAGE{$cs}[2])
         unless defined &$fn;
     return *$fn;
 }
 
-sub convert($$;$){ 
+sub convert($$;$){
     my $fn = __cs2cs_factory shift, shift;
     return &$fn;
 }
@@ -124,7 +124,7 @@ sub detect(@)
 
     return undef unless length and   # can't detect if 8bit chars count less than 1%
         tr/\x80-\xff// / $_[0] =~ tr/\x40-\xff// > 0.01;
-    
+
     for my $cs( keys %CODEPAGE ){
         local $_ = $_;
         locase $cs;
@@ -161,20 +161,20 @@ sub import
 }
 
 BEGIN{($MUTABLE, $MUTATOR)=('ref$str?$$str:$str',<<'END')}
-sub(;$){ 
+sub(;$){
     my $str = scalar @_ ? $_[0] : defined wantarray ? $_ : \$_;
     %s if length ref$str?$$str:$str;
     return ref $str ? $$str : $str if defined wantarray;
-    $_ = $str if defined $_[0] and not ref $str; 
+    $_ = $str if defined $_[0] and not ref $str;
 }
 END
 
 BEGIN{$MUTATOR_ON_FLY=<<'END'}
-sub(;$){ 
-    my ($pkg,$src,$dst) = ('%s','%s','%s'); 
+sub(;$){
+    my ($pkg,$src,$dst) = ('%s','%s','%s');
     $pkg .= '::'.$src.'2'.$dst;
-    undef *$pkg; 
-    *$pkg = __cs2cs_factory $src, $dst; 
+    undef *$pkg;
+    *$pkg = __cs2cs_factory $src, $dst;
     return &$pkg;
 }
 END
@@ -182,10 +182,10 @@ END
 BEGIN{%CODEPAGE=map{chomp;@_=split/ +/,$_,4;$CP_NAME{$_[1]}=$_[0];$_[0]=>[@_[1..3]]}split/\n/,<<'END'}
 866   dos ibm866         ¡¢£¤¥ñ¦§¨©ª«¬­®¯àáâãäåæçèéêëìíîï€‚ƒ„…ð†‡ˆ‰Š‹ŒŽ‘’“”•–—˜™š›œžŸôõö÷ýü\xfføùúû³ÚÄ¿ÀÙº»¼ÈÉÍÛÜßÝÞ°±²ÃÁÅÂ´ÌÊÎË¹µ¶·¸½¾ÆÇÏÐÑÒÓÔÕÖ×ØòócRT
 20866 koi koi8-r        ÁÂ×ÇÄÅ£ÖÚÉÊËÌÍÎÏÐÒÓÔÕÆÈÃÞÛÝßÙØÜÀÑáâ÷çäå³öúéêëìíîïðòóôõæèãþûýÿùøüàñ“›Ÿ—¿\xffœ•ž–‚€ƒ„…¡¨®«¥ Œ‹Ž‘’†‰Šˆ‡±»¾¸µ²´§¦­¬¯°¹º¶·ª©¢¤½¼™˜cRT
-855   ibm cp855          ¢ë¬¦¨„éó·½ÆÐÒÔÖØáãåçªµ¤ûõùžñí÷œÞ¡£ì­§©…êô¸¾ÇÑÓÕ×Ýâäæè«¶¥üöúŸòîøàŒ™˜Ïï\xff    ³ÚÄ¿ÀÙº»¼ÈÉÍÛÜß  °±²ÃÁÅÂ´ÌÊÎË¹                    cRT
-1251  win windows-1251  àáâãäå¸æçèéêëìíîïðñòóôõö÷øùúûüýþÿÀÁÂÃÄÅ¨ÆÇÈÉÊËÌÍÎÏÐÑÒÓÔÕÖ×ØÙÚÛÜÝÞß¯¿¡¢¤¹\xa0°•·v¦--¬L-¦¬-Lã=---¦¦---+++T+¦¦+T¦¦¦¬¬--¦¦¦¦TTLL-ã++ªº©®™
-10007 mac ms-cyrillic   àáâãäå¸æçèéêëìíîïðñòóôõö÷øùúûüýþß€‚ƒ„…ð†‡ˆ‰Š‹ŒŽ‘’“”•–—˜™š›œžŸì•ÙØÛÜ\xca¡¥áÃ                                                  ©¨ª
-28585 iso iso_8859-5    ÐÑÒÓÔÕñÖ×ØÙÚÛÜÝÞßàáâãäåæçèéêëìíîï°±²³´µ¡¶·¸¹º»¼½¾¿ÀÁÂÃÄÅÆÇÈÉÊËÌÍÎÏ¤ô¦ö ð\xa0§÷ú ƒŠ…†Œ“•œ–š’‘                                 £ócRT
+855   ibm cp855          ¢ë¬¦¨„éó·½ÆÐÒÔÖØáãåçªµ¤ûõùžñí÷œÞ¡£ì­§©…êô¸¾ÇÑÓÕ×Ýâäæè«¶¥üöúŸòîøàŒ™˜Ïï\xffo..v³ÚÄ¿ÀÙº»¼ÈÉÍÛÜß||°±²ÃÁÅÂ´ÌÊÎË¹´º»¿¼ÙÃÌÊÁËËÈÈÉÉÎÎ‡†cRT
+1251  win windows-1251  àáâãäå¸æçèéêëìíîïðñòóôõö÷øùúûüýþÿÀÁÂÃÄÅ¨ÆÇÈÉÊËÌÍÎÏÐÑÒÓÔÕÖ×ØÙÚÛÜÝÞß¯¿¡¢¤¹\xa0°•·v¦r-¬LJ¦¬JLr=---¦¦---¦-†r¦¦¦+r¦¦¦¬¬JJ¦¦¦¦rnLtfn+‡ªº©®™
+10007 mac ms-cyrillic   àáâãäå¸æçèéêëìíîïðñòóôõö÷øùúûüýþß€‚ƒ„…ð†‡ˆ‰Š‹ŒŽ‘’“”•–—˜™š›œžŸì•ÙØÛÜ\xca¡¥áÃ|r-ÂLJ|ÂJLr=BbP||BBB+++-||-+-|||ÂÂJJ||=-=--tfn+=¸¹©¨ª
+28585 iso iso_8859-5    ÐÑÒÓÔÕñÖ×ØÙÚÛÜÝÞßàáâãäåæçèéêëìíîï°±²³´µ¡¶·¸¹º»¼½¾¿ÀÁÂÃÄÅÆÇÈÉÊËÌÍÎÏ¤ô¦ö ð\xa0§÷úvƒŠ…†Œ“•œ–š’‘’’’’’ƒŠ+Šƒ“š+š“ƒ“•…œŒƒ“šŠšš––++£ócRT
 END
 
 BEGIN{$STATISTIC=<<'END'}
@@ -243,10 +243,10 @@ cyrillic - Library for fast and easy cyrillic text manipulation
 
 =head1 DESCRIPTION
 
-This module includes cyrillic string converting functions 
+This module includes cyrillic string converting functions
 from one and to another charset, to upper and to lower case without
 locale switching. Also included single-byte charsets detection routine.
-It is easy to add new code pages. For this purpose it is necessary 
+It is easy to add new code pages. For this purpose it is necessary
 only to add appropriate string of a code page.
 
 Supported charsets:
@@ -268,7 +268,7 @@ If the first imported parameter - number of a code page, then locale will be swi
 
 =item * lofirst - convert first char to lower case
 
-=item * detect - detect codepage number 
+=item * detect - detect codepage number
 
 =item * charset - returns charset name for codepage number
 
@@ -291,7 +291,7 @@ Names for using in named charset convertors:
     dos ibm866       866
     koi koi8-r       20866
     ibm cp855        855
-    win windows-1251 1251 
+    win windows-1251 1251
     mac ms-cyrillic  10007
     iso iso_8859-5   28585
     uni Unicode
@@ -313,8 +313,8 @@ The following rules are correct for converting functions:
 
 Convert VAR from SRC_CP codepage to DST_CP codepage and returns
 converted string.
-  
-The converting Unicode or UTF-8 data requires presence of 
+
+The converting Unicode or UTF-8 data requires presence of
 installed Unicode::String and Unicode::Map.
 
 =item B<upcase> CODEPAGE, [VAR]
@@ -363,7 +363,7 @@ If codepage not detected then returns undefined value;
   print detect $_;
 
 
-  
+
   # CONVERTING TEST:
 
   use cyrillic qw/utf2dos mac2utf dos2mac win2dos utf2win/;
@@ -388,7 +388,7 @@ If codepage not detected then returns undefined value;
   $_ = dos2win( $_ );
 
 
-  
+
   # FOR EASY SWITCH LOCALE CODEPAGE
 
   use cyrillic qw/866/;   # locale switched to Russian_Russia.866
@@ -403,11 +403,11 @@ If codepage not detected then returns undefined value;
 
   * Q: Why module say: Can't create Unicode::Map for 'koi8-r' charset!
     A: Your Unicode::Map module can't find map file for 'koi8-r' charset.
-       In Unicode::Map manual is told whence it is possible to download 
+       In Unicode::Map manual is told whence it is possible to download
        this file and as it to install in the system.
 
   * Q: Why perl say: "Undefined subroutine koi2win called" ?
-    A: The function B<koi2win> is specialization of the function B<convert>, 
+    A: The function B<koi2win> is specialization of the function B<convert>,
        which is created at inclusion it of the name in the list of import.
 
 
