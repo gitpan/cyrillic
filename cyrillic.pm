@@ -1,5 +1,5 @@
 package cyrillic;
-$cyrillic::VERSION = '2.02';
+$cyrillic::VERSION = '2.03';
 
 use 5.6.0;
 use strict;
@@ -162,7 +162,7 @@ sub import
 
 BEGIN{($MUTABLE, $MUTATOR)=('ref$str?$$str:$str',<<'END')}
 sub(;$){ 
-    my $str = shift; #$_[0];
+    my $str = $_[0];
     $str = defined wantarray ? $_ : \$_ unless defined $str; %s;
     return ref $str ? $$str : $str if defined wantarray;
     $_ = $str if defined $_[0] and not ref $str; 
@@ -175,7 +175,7 @@ sub(;$){
     $pkg.='::'.$src.'2'.$dst;
     undef *$pkg; 
     *$pkg = __cs2cs_factory $src, $dst; 
-    return &$pkg(shift);
+    return &$pkg($_[0]);
 }
 END
 
