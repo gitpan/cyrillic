@@ -1,7 +1,0 @@
-Makefile.PL
-Convert/Cyrillic.pm
-Convert/Cyrillic/Utils.pm
-Lingua/DetectCharset.pm
-Lingua/DetectCharset/StatKoi.pm
-Lingua/DetectCharset/StatWin.pm
-t/1.t

@@ -3,5 +3,6 @@ use ExtUtils::MakeMaker;
 # the contents of the Makefile that is written.
 
 WriteMakefile(
-    'NAME'	=> 'cyrillic-suite',
+    'NAME'  => 'cyrillic',
+    'VERSION_FROM' => 'cyrillic.pm', # finds $VERSION
 );

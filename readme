@@ -1,0 +1,57 @@
+NAME
+    cyrillic - Library for cyrillic text manipulation
+
+SYNOPSIS
+      use cyrillic qw/866 win2dos/;
+
+      print cyrillic::convert( 866, 1251, $str );
+      print cyrillic::convert( 'dos','win', \$str );
+      print win2dos $str;
+
+DESCRIPTION
+    If first import parameters is number of codepage then localisation
+    switched to they codepage. Specialisations like 'win2dos' work more
+    faster then 'convert', while eval procedure called only once, when
+    function created.
+
+    Easy adding new charset. For they need only add charset string.
+
+FUNCTIONS
+      At importing list might be listed named convertors. For Ex.:
+
+      use cyrillic qw/dos2win win2koi mac2dos ibm2dos/;
+
+    convert SRC_CP, DST_CP, [VAR]
+    Convert VAR from SRC_CP codepage to DST_CP codepage and returns
+    converted string. VAR may be SCALAR or REF to SCALAR. If VAR is REF to
+    SCALAR then SCALAR will be converted. If VAR is ommited then $_
+    operated. If function called to void context and VAR is not REF then
+    result placed to $_.
+
+    upcase CODEPAGE, [VAR]
+    Convert VAR to uppercase using CODEPAGE table and returns converted
+    string. VAR may be SCALAR or REF to SCALAR. If VAR is REF to SCALAR then
+    SCALAR will be converted. If VAR is ommited then $_ operated. If
+    function called to void context and VAR is not REF then result placed to
+    $_.
+
+    locase CODEPAGE, [VAR]
+    Convert VAR to lowercase using CODEPAGE table and returns converted
+    string. VAR may be SCALAR or REF to SCALAR. If VAR is REF to SCALAR then
+    SCALAR will be converted. If VAR is ommited then $_ operated. If
+    function called to void context and VAR is not REF then result placed to
+    $_.
+
+    detect ARRAY
+    Detect charset of data in ARRAY and returns name of charset. If charset
+    name not detected then returns 'eng';
+
+AUTHOR
+    Albert MICHEEV <Albert@f80.n5049.z2.fidonet.org>
+
+COPYRIGHT
+    Copyright (C) 2000, Albert MICHEEV
+
+    This module is free software; you can redistribute it or modify it under
+    the same terms as Perl itself.
+
