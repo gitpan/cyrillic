@@ -1,5 +1,8 @@
 Revision history for Perl extension cyrillic.
 
+1.23  11 Jun 2001
+    - insignificant misprint fixed
+
 1.22  09 Jun 2001
     - fixed psevdographic chars converting bug
 

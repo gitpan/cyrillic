@@ -1,5 +1,5 @@
 package cyrillic;
-$curillic::VERSION = '1.22';
+$cyrillic::VERSION = '1.23';
 
 =head1 NAME
 
@@ -131,6 +131,7 @@ The latest version of this library is likely to be available from:
 
 =cut
 
+use 5.6.0;
 use vars qw/%CP_NAME %CODEPAGE %STATISTIC $STATISTIC $TRANSLATOR $TRANSLATOR_FIRST/;
 
 sub prepare
