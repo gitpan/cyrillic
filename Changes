@@ -1,5 +1,10 @@
 Revision history for Perl extension cyrillic.
 
+2.09  16 Aug 2001
+    - added functions cset_factory and case_factory
+    - extended detect function for detecting charsets list
+    - added koi8-r.map for Unicode::Map
+
 2.08  04 Jul 2001
     - optimized via decreasing of eval blocks
 

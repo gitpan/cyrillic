@@ -2,11 +2,11 @@ NAME
     cyrillic - Library for fast and easy cyrillic text manipulation
 
 SYNOPSIS
-      use cyrillic qw/866 win2dos convert locase upcase detect/;
+     use cyrillic qw/866 win2dos convert locase upcase detect/;
 
-      print convert( 866, 1251, $str );
-      print convert( 'dos','win', \$str );
-      print win2dos $str;
+     print convert( 866, 1251, $str );
+     print convert( 'dos','win', \$str );
+     print win2dos $str;
 
 DESCRIPTION
     This module includes cyrillic string converting functions from one and
@@ -22,6 +22,8 @@ DESCRIPTION
     will be switched to it.
 
 FUNCTIONS
+    * cset_factory - between charsets convertion function generator
+    * case_factory - case convertion function generator
     * convert - between charsets convertor
     * upcase - convert to upper case
     * locase - convert to lower case
@@ -31,7 +33,7 @@ FUNCTIONS
     * charset - returns charset name for codepage number
     At importing list also might be listed named convertors. For Ex.:
 
-      use cyrillic qw/dos2win win2koi mac2dos ibm2dos/;
+     use cyrillic qw/dos2win win2koi mac2dos ibm2dos/;
 
     NOTE! Specialisations (like win2dos, utf2win) call faster then convert.
 
@@ -41,46 +43,54 @@ FUNCTIONS
 
     Names for using in named charset convertors:
 
-        dos ibm866       866
-        koi koi8-r       20866
-        ibm cp855        855
-        win windows-1251 1251 
-        mac ms-cyrillic  10007
-        iso iso_8859-5   28585
-        uni Unicode
-        utf UTF-8
+     dos ibm866       866
+     koi koi8-r       20866
+     ibm cp855        855
+     win windows-1251 1251
+     mac ms-cyrillic  10007
+     iso iso-8859-5   28585
+     uni Unicode
+     utf UTF-8
 
     The following rules are correct for converting functions:
 
-      VAR may be SCALAR or REF to SCALAR.
-      If VAR is REF to SCALAR then SCALAR will be converted.
-      If VAR is ommited then $_ operated.
-      If function called to void context and VAR is not REF
-      then result placed to $_.
+     VAR may be SCALAR or REF to SCALAR.
+     If VAR is REF to SCALAR then SCALAR will be converted.
+     If VAR is ommited then $_ operated.
+     If function called to void context and VAR is not REF
+     then result placed to $_.
 
 CONVERSION METHODS
-    convert SRC_CP, DST_CP, [VAR]
-    Convert VAR from SRC_CP codepage to DST_CP codepage and returns
-    converted string.
+    cset_factory SRC_CP, DST_CP
+    Generates between codepages convertor function, from SRC_CP to DST_CP,
+    and returns reference to his.
 
     The converting Unicode or UTF-8 data requires presence of installed
     Unicode::String and Unicode::Map.
 
+    case_factory CODEPAGE, [TO_UP], [ONLY_FIRST_LETTER]
+    Generates case convertor function for single-byte CODEPAGE and returns
+    reference to his.
+
+    convert SRC_CP, DST_CP, [VAR]
+    Convert VAR from SRC_CP codepage to DST_CP codepage and returns
+    converted string. Internaly calls cset_factory.
+
     upcase CODEPAGE, [VAR]
     Convert VAR to uppercase using CODEPAGE table and returns converted
-    string.
+    string. Internaly calls case_factory.
 
     locase CODEPAGE, [VAR]
     Convert VAR to lowercase using CODEPAGE table and returns converted
-    string.
+    string. Internaly calls case_factory.
 
     upfirst CODEPAGE, [VAR]
     Convert first char of VAR to uppercase using CODEPAGE table and returns
-    converted string.
+    converted string. Internaly calls case_factory.
 
     lofirst CODEPAGE, [VAR]
     Convert first char of VAR to lowercase using CODEPAGE table and returns
-    converted string.
+    converted string. Internaly calls case_factory.
 
 MAINTAINANCE METHODS
     charset CODEPAGE
@@ -88,61 +98,78 @@ MAINTAINANCE METHODS
 
     detect ARRAY
     Detect single-byte codepage of data in ARRAY and returns codepage
-    number. If codepage not detected then returns undefined value;
+    number. If first element of ARRAY is REF to array of codepages numbers,
+    then detecting will made between these codepages, otherwise - between
+    all single-byte codepages. If codepage not detected then returns
+    undefined value;
 
 EXAMPLES
-      use cyrillic qw/convert locase upcase detect dos2win win2dos/;
+     use cyrillic qw/convert locase upcase detect dos2win win2dos/;
 
-      $\ = "\n";
-      $_ = "\x8F\xE0\xA8\xA2\xA5\xE2 \xF0\xA6\x88\xAA\x88!";
+     $_ = "\x8F\xE0\xA8\xA2\xA5\xE2 \xF0\xA6\x88\xAA\x88!";
 
-      print; upcase 866;
-      print; dos2win;
-      print; win2dos;
-      print; locase 866;
-      print;
-      print detect $_;
+     printf "    dos: '%s'\n", $_;
+     upcase 866;
+     printf " upcase: '%s'\n", $_;
+     dos2win;
+     printf "dos2win: '%s'\n", $_;
+     win2dos;
+     printf "win2dos: '%s'\n", $_;
+     locase 866;
+     printf " locase: '%s'\n", $_;
+     printf " detect: '%s'\n", detect $_;
 
-      # CONVERTING TEST:
+     # detect between 866 and 20866 codepages
+     printf " detect: '%s'\n", detect [866, 20866], $_;
 
-      use cyrillic qw/utf2dos mac2utf dos2mac win2dos utf2win/;
+     # CONVERTING TEST:
 
-      $_ = "Хелло Ворльд!\n";
+     use cyrillic qw/utf2dos mac2utf dos2mac win2dos utf2win/;
 
-      print "UTF-8: $_";
-      print "  DOS: ", utf2dos mac2utf dos2mac win2dos utf2win $_;
+     $_ = "Хелло Ворльд!\n";
 
-      # EQVIVALENT CALLS:
+     print "UTF-8: $_";
+     print "  DOS: ", utf2dos mac2utf dos2mac win2dos utf2win $_;
 
-      dos2win( $str );        # called to void context -> result placed to $_
-      $_ = dos2win( $str );
+     # EQVIVALENT CALLS:
 
-      dos2win( \$str );       # called with REF to string -> direct converting
-      $str = dos2win( $str );
+     dos2win( $str );        # called to void context -> result placed to $_
+     $_ = dos2win( $str );
 
-      dos2win();              # with ommited param called -> $_ converted
-      dos2win( \$_ );
-      $_ = dos2win( $_ );
+     dos2win( \$str );       # called with REF to string -> direct converting
+     $str = dos2win( $str );
 
-      # FOR EASY SWITCH LOCALE CODEPAGE
+     dos2win();              # with ommited param called -> $_ converted
+     dos2win( \$_ );
+     $_ = dos2win( $_ );
 
-      use cyrillic qw/866/;   # locale switched to Russian_Russia.866
+     my $convert = cset_factory 866, 1251;
+     &$convert( $str );            # faster call convertor function via ref to his
+       convert( 866, 1251, $str ); # slower call convertor function
 
-      use locale;
-      print $str =~ /(\w+)/;
+     # FOR EASY SWITCH LOCALE CODEPAGE
 
-      no locale;
-      print $str =~ /(\w+)/;
+     use cyrillic qw/866/;   # locale switched to Russian_Russia.866
+
+     use locale;
+     print $str =~ /(\w+)/;
+
+     no locale;
+     print $str =~ /(\w+)/;
 
 FAQ
-      * Q: Why module say: Can't create Unicode::Map for 'koi8-r' charset!
-        A: Your Unicode::Map module can't find map file for 'koi8-r' charset.
-           In Unicode::Map manual is told whence it is possible to download 
-           this file and as it to install in the system.
+     * Q: Why module say: Can't create Unicode::Map for 'koi8-r' charset!
+       A: Your Unicode::Map module can't find map file for 'koi8-r' charset.
+          Copy file koi8-r.map to site/lib/Unicode/Map and add to file
+          site/lib/Unicode/Map/registry followings three strings:
 
-      * Q: Why perl say: "Undefined subroutine koi2win called" ?
-        A: The function B<koi2win> is specialization of the function B<convert>, 
-           which is created at inclusion it of the name in the list of import.
+          name:    KOI8-R
+          map:     $UnicodeMappings/koi8-r.map
+          alias:   csKOI8R
+
+     * Q: Why perl say: "Undefined subroutine koi2win called" ?
+       A: The function B<koi2win> is specialization of the function B<convert>,
+          which is created at inclusion it of the name in the list of import.
 
 AUTHOR
     Albert MICHEEV <Albert@f80.n5049.z2.fidonet.org>

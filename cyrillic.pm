@@ -1,30 +1,18 @@
 package cyrillic;
-$cyrillic::VERSION = '2.08';
+$cyrillic::VERSION = '2.09';
 
 use 5.005_02;
 use strict;
-use vars qw/%CP_NAME %CODEPAGE %STATISTIC $MUTABLE/;
+use vars qw/%CP_NAME %CODEPAGE %STATISTIC/;
 
-sub __prepare
-{
-    my($src, $dst)=map $$_[2], @CODEPAGE{@_};
-    substr($src, length $1, length $2) = '',
-    substr($dst, length $1, length $2) = ''  while $dst =~ /^(.+?)( +)/;
-    s/-/\\-/g, substr($_, 66, 0) = '\x00-\x7f' for $src, $dst;
-    return $src, $dst;
+sub __mutator_factory($){ eval q/sub(;$){
+    my $str = scalar @_ ? $_[0] : defined wantarray ? $_ : \$_;
+    for( ref$str?$$str:$str ){ /. shift() .q/ if length }
+    return ref $str ? $$str : $str if defined wantarray;
+    $_ = $str if defined $_[0] and not ref $str }/;
 }
 
-sub __mutator_factory($)
-{
-    eval sprintf q/sub(;$){
-        my $str = scalar @_ ? $_[0] : defined wantarray ? $_ : \$_;
-        %s if length ref$str?$$str:$str;
-        return ref $str ? $$str : $str if defined wantarray;
-        $_ = $str if defined $_[0] and not ref $str;
-    }/, shift;
-}
-
-sub __cs2cs_factory($$)
+sub cset_factory($$)
 {
     my ($src, $dst, $fn, $sw) = @_;
     no strict qw/refs/;
@@ -33,11 +21,11 @@ sub __cs2cs_factory($$)
     {
         $fn = $sw ? 'uni2utf' : 'utf2uni';
 
-        unless( defined &$fn ){
+        return *$fn if defined &$fn;
+
         require "Unicode/String.pm" unless defined %Unicode::String::;
-        *$fn = __mutator_factory( sprintf '%s = Unicode::String::%s( %s )->%s',
-            $MUTABLE, $sw?'utf16':'utf8', $MUTABLE, $sw?'utf8':'utf16' );
-        }
+        *$fn = __mutator_factory( sprintf '$_=Unicode::String::%s($_)->%s',
+            $sw ? qw/utf16 utf8/ : qw/utf8 utf16/ );
     }
     elsif( $src eq 'utf' ||  $src eq 'uni'    or $sw =    $dst eq 'utf' ||  $dst eq 'uni' )
     {
@@ -45,9 +33,7 @@ sub __cs2cs_factory($$)
         $cs = $CP_NAME{$cs} if exists $CP_NAME{$cs};
         $fn = sprintf $sw ? ($un?'%s2uni':'%s2utf') : ($un?'uni2%s':'utf2%s'), $CODEPAGE{$cs}[0];
 
-        print "defined $fn" if defined &$fn;
-
-        unless( defined &$fn ){
+        return *$fn if defined &$fn;
 
         require "Unicode/String.pm" unless defined %Unicode::String::;
         require "Unicode/Map.pm"    unless defined %Unicode::Map::;
@@ -56,75 +42,54 @@ sub __cs2cs_factory($$)
         $CODEPAGE{$cs}[3] = new Unicode::Map( $CODEPAGE{$cs}[1] ) or
             die "Can't create Unicode::Map for '$CODEPAGE{$cs}[1]' charset!\n" unless $CODEPAGE{$cs}[3];
 
-        *$fn = __mutator_factory( $un ?
-            sprintf( '%s = $CODEPAGE{%s}[3]->%s_unicode(%s)',
-                $MUTABLE, $cs, (!$sw ? 'from' : 'to'), $MUTABLE ) :
-            sprintf( !$sw ?
-                '%s = $CODEPAGE{%s}[3]->from_unicode( Unicode::String::utf8(%s) )' :
-                '%s = Unicode::String::utf16(  $CODEPAGE{%s}[3]->to_unicode(%s) )->utf8',
-                $MUTABLE, $cs, $MUTABLE )
-        );
-
-        }
+        *$fn = $un ?
+            __mutator_factory(sprintf '$_=$CODEPAGE{%s}[3]->%s_unicode($_)', $cs, (!$sw?'from':'to')) :
+            __mutator_factory(sprintf !$sw ?
+                '$_=$CODEPAGE{%s}[3]->from_unicode(Unicode::String::utf8($_))':
+                '$_=Unicode::String::utf16($CODEPAGE{%s}[3]->to_unicode($_) )->utf8', $cs);
     }
     else
     {
         exists $CP_NAME{$_} and $_ = $CP_NAME{$_} for $src, $dst;
         exists $CODEPAGE{$_} or die"Unknown codepage '$_'\n" for $src, $dst;
         $fn = $CODEPAGE{$src}[0].'2'.$CODEPAGE{$dst}[0];
-       *$fn = __mutator_factory sprintf('(%s) =~ tr/%s/%s/',
-            $MUTABLE, __prepare($src, $dst)) unless defined &$fn;
+
+        return *$fn if defined &$fn;
+
+        $_ = $CODEPAGE{$_}[2] for $src, $dst;
+        substr($src, length $1, length $2) = '',
+        substr($dst, length $1, length $2) = ''  while
+            $dst =~ /^(.+?)( +)/ or $src =~ /^(.+?)([\x00-\x7f]+)/;
+        s/-/\\-/g for $src, $dst;
+        *$fn = __mutator_factory "tr/$src/$dst/";
     }
 
     return *$fn;
 }
 
-sub __case_factory($$$)
-{
-    my ($cs, $up, $fr, $fn) = @_;
+sub case_factory($;$$){
+    my ($cs, $up, $fr) = @_;
     $cs = $CP_NAME{$cs} if exists $CP_NAME{$cs};
     die "Unknown codepage '$cs'\n" if not exists $CODEPAGE{$cs};
-    $fn = ($up?'up':'lo').($fr?'first':'case').'_'.$cs;
+    my $fn = ($up?'up':'lo').($fr?'first':'case').'_'.$cs;
     no strict qw/refs/;
-   *$fn = __mutator_factory sprintf( $fr ? 'substr(%s,0,1) =~ tr/%s/%s/' : '(%s) =~ tr/%s/%s/', $MUTABLE,
-        $up ? unpack('a33a33', $CODEPAGE{$cs}[2]) : reverse unpack('a33a33', $CODEPAGE{$cs}[2]) )
-        unless defined &$fn;
+    unless( defined &$fn ){
+        *$fn = __mutator_factory( ($fr?'substr($_,0,1)=~':'').sprintf 'tr/%s/%s/',
+        $up   ? unpack'a33a33',$CODEPAGE{$cs}[2] :
+        reverse unpack'a33a33',$CODEPAGE{$cs}[2] ) }
     return *$fn;
 }
 
-sub convert($$;$){
-    my $fn = __cs2cs_factory shift, shift;
-    goto &$fn;
-}
-
-sub upcase($;$){
-    my $fn = __case_factory shift, 1, 0;
-    goto &$fn;
-}
-
-sub locase($;$){
-    my $fn = __case_factory shift, 0, 0;
-    goto &$fn;
-}
-
-sub upfirst($;$){
-    my $fn = __case_factory shift, 1, 1;
-    goto &$fn;
-}
-
-sub lofirst($;$){
-    my $fn = __case_factory shift, 0, 1;
-    goto &$fn;
-}
-
-sub charset($){
-    return $CODEPAGE{shift()}[1];
-}
+sub convert($$;$){ my $fn = cset_factory shift,shift; goto &$fn }
+sub upfirst($;$) { my $fn = case_factory shift, 1, 1; goto &$fn }
+sub lofirst($;$) { my $fn = case_factory shift, 0, 1; goto &$fn }
+sub upcase($;$)  { my $fn = case_factory shift, 1, 0; goto &$fn }
+sub locase($;$)  { my $fn = case_factory shift, 0, 0; goto &$fn }
+sub charset($)   { $CODEPAGE{shift()}[1] }
 
 sub detect(@)
 {
-    my (@data, %score) = @_;
-    unless( scalar keys %STATISTIC ){
+    unless( keys %STATISTIC ){
         my $STATISTIC = join '', <DATA>;
         for( keys %CODEPAGE ){
             $STATISTIC{$_} = $STATISTIC;
@@ -132,13 +97,16 @@ sub detect(@)
             $STATISTIC{$_} = { map{ unpack 'a2a*',$_ }split /\s+/, $STATISTIC{$_} };
         }
     }
-    local $_ = join ' ', @data;
+
+    my $score = shift if ref $_[0];
+    local $_ = join ' ', @_;
     tr/\x00-\x7f/ /s; s/ .(?= )//go; s/^ //o; s/ $//o;
 
     return undef unless length and   # can't detect if 8bit chars count less than 1%
         tr/\x80-\xff// / $_[0] =~ tr/\x40-\xff// > 0.01;
 
-    for my $cs( keys %CODEPAGE ){
+    my %score;
+    for my $cs( $score ? @$score : keys %CODEPAGE ){
         local $_ = $_;
         locase $cs;
         for( split / / ){
@@ -163,27 +131,27 @@ sub import
     no strict qw/refs/;
 
     while( my $src2dst = shift ){
-        unless( defined &$src2dst ){
-            my ($src, $dst) = $src2dst =~ /^([a-z]{3})2([a-z]{3})$/ or
-                die "Unknown import '$src2dst'!\n";
-            *{$pkg.'::'.$src2dst} = sub(;$){
-                undef *{$pkg.'::'.$src2dst};
-                *{$pkg.'::'.$src2dst} = __cs2cs_factory $src, $dst;
-                goto &$src2dst;
-            };
-        }else{
-            *{$pkg.'::'.$src2dst} = \&$src2dst;
-        }
+        *{$pkg.'::'.$src2dst} = \&$src2dst, next if
+            defined &$src2dst;
+
+        my ($src, $dst) = $src2dst =~ /^([a-z]{3})2([a-z]{3})$/ or
+            die "Unknown import '$src2dst'!\n";
+
+        *{$pkg.'::'.$src2dst} = sub(;$){
+            undef *{$pkg.'::'.$src2dst};
+            *{$pkg.'::'.$src2dst} = cset_factory $src, $dst;
+            goto &$src2dst;
+        };
     }
 }
 
-BEGIN{%CODEPAGE=map{chomp;@_=split/ +/,$_,4;$CP_NAME{$_[1]}=int $_[0];int $_[0]=>[@_[1..3]]}split/\n/,<<'END';$MUTABLE='ref$str?$$str:$str'}
-866   dos ibm866         ¡¢£¤¥ñ¦§¨©ª«¬­®¯àáâãäåæçèéêëìíîï€‚ƒ„…ð†‡ˆ‰Š‹ŒŽ‘’“”•–—˜™š›œžŸôõö÷ýü\xfføùúû³ÚÄ¿ÀÙº»¼ÈÉÍÛÜßÝÞ°±²ÃÁÅÂ´ÌÊÎË¹µ¶·¸½¾ÆÇÏÐÑÒÓÔÕÖ×ØòócRT
-20866 koi koi8-r        ÁÂ×ÇÄÅ£ÖÚÉÊËÌÍÎÏÐÒÓÔÕÆÈÃÞÛÝßÙØÜÀÑáâ÷çäå³öúéêëìíîïðòóôõæèãþûýÿùøüàñ“›Ÿ—¿\xffœ•ž–‚€ƒ„…¡¨®«¥ Œ‹Ž‘’†‰Šˆ‡±»¾¸µ²´§¦­¬¯°¹º¶·ª©¢¤½¼™˜cRT
-855   ibm cp855          ¢ë¬¦¨„éó·½ÆÐÒÔÖØáãåçªµ¤ûõùžñí÷œÞ¡£ì­§©…êô¸¾ÇÑÓÕ×Ýâäæè«¶¥üöúŸòîøàŒ™˜Ïï\xffo..v³ÚÄ¿ÀÙº»¼ÈÉÍÛÜß||°±²ÃÁÅÂ´ÌÊÎË¹´º»¿¼ÙÃÌÊÁËËÈÈÉÉÎÎ‡†cRT
-1251  win windows-1251  àáâãäå¸æçèéêëìíîïðñòóôõö÷øùúûüýþÿÀÁÂÃÄÅ¨ÆÇÈÉÊËÌÍÎÏÐÑÒÓÔÕÖ×ØÙÚÛÜÝÞß¯¿¡¢¤¹\xa0°•·v¦r-¬LJ¦¬JLr=---¦¦---¦-†r¦¦¦+r¦¦¦¬¬JJ¦¦¦¦rnLtfn+‡ªº©®™
-10007 mac ms-cyrillic   àáâãäå¸æçèéêëìíîïðñòóôõö÷øùúûüýþß€‚ƒ„…ð†‡ˆ‰Š‹ŒŽ‘’“”•–—˜™š›œžŸì•ÙØÛÜ\xca¡¥áÃ|r-ÂLJ|ÂJLr=BbP||BBB+++-||-+-|||ÂÂJJ||=-=--tfn+=¸¹©¨ª
-28585 iso iso_8859-5    ÐÑÒÓÔÕñÖ×ØÙÚÛÜÝÞßàáâãäåæçèéêëìíîï°±²³´µ¡¶·¸¹º»¼½¾¿ÀÁÂÃÄÅÆÇÈÉÊËÌÍÎÏ¤ô¦ö ð\xa0§÷úvƒŠ…†Œ“•œ–š’‘’’’’’ƒŠ+Šƒ“š+š“ƒ“•…œŒƒ“šŠšš––++£ócRT
+BEGIN{%CODEPAGE=map{chomp;@_=split/ +/,$_,4;$CP_NAME{$_[1]}=int $_[0];int $_[0]=>[@_[1..3]]}split/\n/,<<'END'}
+866   dos ibm866         ¡¢£¤¥ñ¦§¨©ª«¬­®¯àáâãäåæçèéêëìíîï€‚ƒ„…ð†‡ˆ‰Š‹ŒŽ‘’“”•–—˜™š›œžŸôõö÷ýüÿøùúû³ÚÄ¿ÀÙº»¼ÈÉÍÛÜßÝÞ°±²þÃÁÅÂ´ÌÊÎË¹µ¶·¸½¾ÆÇÏÐÑÒÓÔÕÖ×ØòócRT
+20866 koi koi8-r        ÁÂ×ÇÄÅ£ÖÚÉÊËÌÍÎÏÐÒÓÔÕÆÈÃÞÛÝßÙØÜÀÑáâ÷çäå³öúéêëìíîïðòóôõæèãþûýÿùøüàñ“›Ÿ—¿ÿœ•ž–‚€ƒ„…¡¨®«¥ Œ‹Ž‘’”†‰Šˆ‡±»¾¸µ²´§¦­¬¯°¹º¶·ª©¢¤½¼™˜cRT
+855   ibm cp855          ¢ë¬¦¨„éó·½ÆÐÒÔÖØáãåçªµ¤ûõùžñí÷œÞ¡£ì­§©…êô¸¾ÇÑÓÕ×Ýâäæè«¶¥üöúŸòîøàŒ™˜Ïïÿo..v³ÚÄ¿ÀÙº»¼ÈÉÍÛÜß||°±²þÃÁÅÂ´ÌÊÎË¹´º»¿¼ÙÃÌÊÁËËÈÈÉÉÎÎ‡†cRT
+1251  win windows-1251  àáâãäå¸æçèéêëìíîïðñòóôõö÷øùúûüýþÿÀÁÂÃÄÅ¨ÆÇÈÉÊËÌÍÎÏÐÑÒÓÔÕÖ×ØÙÚÛÜÝÞß¯¿¡¢¤¹ °•·v¦r-¬LJ¦¬JLr=---¦¦---o¦-†r¦¦¦+r¦¦¦¬¬JJ¦¦¦¦rnLtfn+‡ªº©®™
+10007 mac ms-cyrillic   àáâãäå¸æçèéêëìíîïðñòóôõö÷øùúûüýþß€‚ƒ„…ð†‡ˆ‰Š‹ŒŽ‘’“”•–—˜™š›œžŸì•ÙØÛÜÊ¡¥áÃ|r-ÂLJ|ÂJLr=BbP||BBBo+++-||-+-|||ÂÂJJ||=-=--tfn+=¸¹©¨ª
+28585 iso iso-8859-5    ÐÑÒÓÔÕñÖ×ØÙÚÛÜÝÞßàáâãäåæçèéêëìíîï°±²³´µ¡¶·¸¹º»¼½¾¿ÀÁÂÃÄÅÆÇÈÉÊËÌÍÎÏ¤ô¦ö ð §÷úvƒŠ…†Œ“•œ–š’‘’’’’’þƒŠ+Šƒ“š+š“ƒ“•…œŒƒ“šŠšš––++£ócRT
 END
 
 1;
@@ -216,6 +184,10 @@ If the first imported parameter - number of a code page, then locale will be swi
 =head1 FUNCTIONS
 
 =over 4
+
+=item * cset_factory - between charsets convertion function generator
+
+=item * case_factory - case convertion function generator
 
 =item * convert - between charsets convertor
 
@@ -252,7 +224,7 @@ Names for using in named charset convertors:
  ibm cp855        855
  win windows-1251 1251
  mac ms-cyrillic  10007
- iso iso_8859-5   28585
+ iso iso-8859-5   28585
  uni Unicode
  utf UTF-8
 
@@ -268,33 +240,43 @@ The following rules are correct for converting functions:
 
 =head1 CONVERSION METHODS
 
-=item B<convert> SRC_CP, DST_CP, [VAR]
+=item B<cset_factory> SRC_CP, DST_CP
 
-Convert VAR from SRC_CP codepage to DST_CP codepage and returns
-converted string.
+Generates between codepages convertor function, from SRC_CP to DST_CP,
+and returns reference to his.
 
 The converting Unicode or UTF-8 data requires presence of
 installed Unicode::String and Unicode::Map.
 
+=item B<case_factory> CODEPAGE, [TO_UP], [ONLY_FIRST_LETTER]
+
+Generates case convertor function for single-byte CODEPAGE
+and returns reference to his.
+
+=item B<convert> SRC_CP, DST_CP, [VAR]
+
+Convert VAR from SRC_CP codepage to DST_CP codepage and returns
+converted string. Internaly calls B<cset_factory>.
+
 =item B<upcase> CODEPAGE, [VAR]
 
 Convert VAR to uppercase using CODEPAGE table and returns
-converted string.
+converted string. Internaly calls B<case_factory>.
 
 =item B<locase> CODEPAGE, [VAR]
 
 Convert VAR to lowercase using CODEPAGE table and returns
-converted string.
+converted string. Internaly calls B<case_factory>.
 
 =item B<upfirst> CODEPAGE, [VAR]
 
 Convert first char of VAR to uppercase using CODEPAGE table and returns
-converted string.
+converted string. Internaly calls B<case_factory>.
 
 =item B<lofirst> CODEPAGE, [VAR]
 
 Convert first char of VAR to lowercase using CODEPAGE table and returns
-converted string.
+converted string. Internaly calls B<case_factory>.
 
 =head1 MAINTAINANCE METHODS
 
@@ -305,6 +287,8 @@ Returns charset name for CODEPAGE.
 =item B<detect> ARRAY
 
 Detect single-byte codepage of data in ARRAY and returns codepage number.
+If first element of ARRAY is REF to array of codepages numbers, then detecting
+will made between these codepages, otherwise - between all single-byte codepages.
 If codepage not detected then returns undefined value;
 
 =head1 EXAMPLES
@@ -314,7 +298,7 @@ If codepage not detected then returns undefined value;
  $_ = "\x8F\xE0\xA8\xA2\xA5\xE2 \xF0\xA6\x88\xAA\x88!";
 
  printf "    dos: '%s'\n", $_;
- upcase 866; 
+ upcase 866;
  printf " upcase: '%s'\n", $_;
  dos2win;
  printf "dos2win: '%s'\n", $_;
@@ -323,6 +307,9 @@ If codepage not detected then returns undefined value;
  locase 866;
  printf " locase: '%s'\n", $_;
  printf " detect: '%s'\n", detect $_;
+
+ # detect between 866 and 20866 codepages
+ printf " detect: '%s'\n", detect [866, 20866], $_;
 
 
  # CONVERTING TEST:
@@ -347,6 +334,10 @@ If codepage not detected then returns undefined value;
  dos2win( \$_ );
  $_ = dos2win( $_ );
 
+ my $convert = cset_factory 866, 1251;
+ &$convert( $str );            # faster call convertor function via ref to his
+   convert( 866, 1251, $str ); # slower call convertor function
+
 
  # FOR EASY SWITCH LOCALE CODEPAGE
 
@@ -362,13 +353,16 @@ If codepage not detected then returns undefined value;
 
  * Q: Why module say: Can't create Unicode::Map for 'koi8-r' charset!
    A: Your Unicode::Map module can't find map file for 'koi8-r' charset.
-      In Unicode::Map manual is told whence it is possible to download
-      this file and as it to install in the system.
+      Copy file koi8-r.map to site/lib/Unicode/Map and add to file
+      site/lib/Unicode/Map/registry followings three strings:
+
+      name:    KOI8-R
+      map:     $UnicodeMappings/koi8-r.map
+      alias:   csKOI8R
 
  * Q: Why perl say: "Undefined subroutine koi2win called" ?
    A: The function B<koi2win> is specialization of the function B<convert>,
       which is created at inclusion it of the name in the list of import.
-
 
 =head1 AUTHOR
 
